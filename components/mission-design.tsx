@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowUpRight, BatteryCharging, Check, ChevronRight, CircleGauge, Disc3, Orbit, RadioTower, Rocket, Satellite, Sun, Target, UsersRound, Waves, Zap } from 'lucide-react'
+import { ArrowUpRight, BatteryCharging, Check, ChevronRight, CircleGauge, Disc3, Orbit, RadioTower, Rocket, Satellite, Shield, Sun, Target, UsersRound, Waves, Zap } from 'lucide-react'
 import type { DesignTab, MissionCheck, MissionConfiguration, MissionEstimate, MissionProfile, SpacecraftSize } from './mission-data'
-import { getAntennaOptions, getBatteryOptions, getOrbit, getRocket, getSolarOptions, getUserProduct, INSTRUMENTS, ORBITS, ROCKETS, USER_PRODUCTS } from './mission-data'
+import { getAntennaOptions, getBatteryOptions, getOrbit, getRocket, getShieldingOptions, getSolarOptions, getUserProduct, INSTRUMENTS, ORBITS, ROCKETS, USER_PRODUCTS } from './mission-data'
 import { DataNote, NasaTag, PageHeading, PrimaryButton, SegmentPill } from './mission-ui'
 import { MissionEquipmentList } from './mission-equipment-list'
 import { ChoiceWithWhy } from './mission-choice-help'
@@ -77,6 +77,7 @@ function SpaceSegment({ mission, size, configuration, onChange }: { mission: Mis
   const solarChoices = getSolarOptions(size)
   const batteryChoices = getBatteryOptions(size)
   const antennaChoices = getAntennaOptions(size)
+  const shieldingChoices = getShieldingOptions(size)
   const toggleInstrument = (id: string) => {
     const current = configuration.instrumentIds
     if (current.includes(id)) onChange({ instrumentIds: current.filter((item) => item !== id) })
@@ -94,6 +95,12 @@ function SpaceSegment({ mission, size, configuration, onChange }: { mission: Mis
       <div className="option-group-heading"><span className="equipment-icon battery-icon"><BatteryCharging aria-hidden="true" /></span><span><strong>Battery</strong><small>Stores energy for eclipse periods</small></span><span className="group-hint">SELECT ONE</span></div>
       <div className="equipment-choice-grid">{batteryChoices.map((option) => <ChoiceWithWhy key={option.id} className="equipment-choice-wrap" impact={{ mass: `Adds ${option.massKg} kg.`, power: `Stores ${option.wattHours} Wh for dark periods; it does not generate power.`, cost: `Adds $${option.costM}M.`, data: 'Does not change science data directly.', lifetime: `${option.lifetimeBonus ? `Adds ${option.lifetimeBonus} year` : 'No direct change to'} mission life.` }}><button className={`equipment-choice ${configuration.batteryId === option.id ? 'equipment-selected' : ''}`} onClick={() => onChange({ batteryId: option.id })} aria-pressed={configuration.batteryId === option.id}>
         <span className="choice-top"><span className="choice-name">{option.name}</span>{configuration.batteryId === option.id && <Check aria-hidden="true" />}</span><span className="choice-desc">{option.description}</span><span className="choice-data"><b>{option.wattHours} Wh</b> capacity <i>·</i> {option.massKg} kg</span><span className="choice-footer"><NasaTag /><b>${option.costM}M</b></span>
+      </button></ChoiceWithWhy>)}</div>
+    </div>
+    <div className="option-group option-group-separated">
+      <div className="option-group-heading"><span className="equipment-icon shield-icon"><Shield aria-hidden="true" /></span><span><strong>Impact shielding</strong><small>Helps protect the spacecraft from small debris</small></span><span className="group-hint">SELECT ONE</span></div>
+      <div className="equipment-choice-grid">{shieldingChoices.map((option) => <ChoiceWithWhy key={option.id} className="equipment-choice-wrap" impact={{ mass: `Adds ${option.massKg} kg.`, power: 'Uses no operating power.', cost: `Adds $${option.costM}M.`, data: 'Does not change science data directly.', lifetime: 'No direct change to mission life.' }}><button className={`equipment-choice ${configuration.shieldingId === option.id ? 'equipment-selected' : ''}`} onClick={() => onChange({ shieldingId: option.id })} aria-pressed={configuration.shieldingId === option.id}>
+        <span className="choice-top"><span className="choice-name">{option.name}</span>{configuration.shieldingId === option.id && <Check aria-hidden="true" />}</span><span className="choice-desc">{option.description}</span><span className="choice-data"><b>{option.protection} event points</b> blocked <i>·</i> {option.massKg} kg</span><span className="choice-footer"><NasaTag /><b>${option.costM}M</b></span>
       </button></ChoiceWithWhy>)}</div>
     </div>
     <div className="option-group option-group-separated">

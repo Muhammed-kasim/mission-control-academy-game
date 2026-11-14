@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { FeasibilityScreen, TradeSpaceScreen } from './mission-cml-flow'
 import { MissionDesign, type DesignPhase } from './mission-design'
 import { buildChecks, calculateMission, getDefaultConfiguration, getMission, getSize, type DifficultyId, type GameStep, type MissionConfiguration, type MissionId, type SizeId } from './mission-data'
 import { MissionOutcomeScreen } from './mission-outcome-screens'
 import { MissionSelectionScreen, RequirementsScreen, SizeSelectionScreen, WelcomeScreen } from './mission-selection-screens'
 import { GameHeader, TelemetryStrip, WarningBanner } from './mission-ui'
+import { simulateMissionEvents, type SimulatedMissionEvent } from './mission-simulation'
 
 function copyConfiguration(configuration: MissionConfiguration): MissionConfiguration {
   return { ...configuration, instrumentIds: [...configuration.instrumentIds] }
@@ -28,6 +29,8 @@ export function MissionControlGame() {
   const [showSkipWarning, setShowSkipWarning] = useState(false)
   const [skippedComparison, setSkippedComparison] = useState(false)
   const [pointDesign, setPointDesign] = useState('Initial design')
+  const [flightEvents, setFlightEvents] = useState<SimulatedMissionEvent[]>([])
+  const [flightId, setFlightId] = useState('')
   const mission = getMission(missionId)
   const size = getSize(sizeId)
   const activeConfiguration = step === 'alternative-a' ? alternativeA ?? configuration : step === 'alternative-b' ? alternativeB ?? configuration : configuration
@@ -110,6 +113,14 @@ export function MissionControlGame() {
     setStep('verify')
   }
 
+  function beginFlight() {
+    setFlightEvents(simulateMissionEvents(configuration))
+    setFlightId(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
+    setStep('launch')
+  }
+
+  const showReport = useCallback(() => setStep('report'), [])
+
   function restartMission() {
     setConfiguration(getDefaultConfiguration(mission, size))
     resetAlternatives()
@@ -141,7 +152,7 @@ export function MissionControlGame() {
     />}
     {step === 'feasibility' && <FeasibilityScreen mission={mission} size={size} difficulty={difficulty} estimate={estimate} checks={checks} showSkipWarning={showSkipWarning} onBack={() => { setShowSkipWarning(false); setStep('design') }} onContinue={beginAlternatives} onSkip={() => setShowSkipWarning(true)} onCancelSkip={() => setShowSkipWarning(false)} onSkipAnyway={skipComparison} />}
     {step === 'trade-space' && alternativeA && alternativeB && <TradeSpaceScreen mission={mission} size={size} alternativeA={alternativeA} alternativeB={alternativeB} estimateA={estimateA} estimateB={estimateB} onBack={() => setStep('alternative-b')} onChoose={selectPointDesign} />}
-    {(step === 'verify' || step === 'launch' || step === 'report') && <MissionOutcomeScreen step={step} mission={mission} size={size} configuration={configuration} estimate={estimate} checks={checks} pointDesign={pointDesign} backLabel={skippedComparison ? 'Back to feasibility review' : 'Back to trade-space comparison'} onBackToDesign={() => setStep(skippedComparison ? 'feasibility' : 'trade-space')} onLaunch={() => setStep('launch')} onReport={() => setStep('report')} onRestart={restartMission} />}
+    {(step === 'verify' || step === 'launch' || step === 'report') && <MissionOutcomeScreen step={step} mission={mission} size={size} difficulty={difficulty} configuration={configuration} estimate={estimate} checks={checks} pointDesign={pointDesign} alternativeA={alternativeA} alternativeB={alternativeB} events={flightEvents} runId={flightId} exploredTradeSpace={Boolean(alternativeA && alternativeB && !skippedComparison)} backLabel={skippedComparison ? 'Back to feasibility review' : 'Back to trade-space comparison'} onBackToDesign={() => setStep(skippedComparison ? 'feasibility' : 'trade-space')} onLaunch={beginFlight} onReport={showReport} onTryAgain={beginFlight} onRestart={restartMission} />}
     {step !== 'welcome' && <footer className="app-footer"><span>MISSION CONTROL ACADEMY <i /> EDUCATIONAL SIMULATION</span><span>Values simplified from real data · Actual missions use detailed engineering models</span></footer>}
   </div>
 }

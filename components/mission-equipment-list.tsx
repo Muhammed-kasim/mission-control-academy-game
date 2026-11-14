@@ -1,8 +1,8 @@
 'use client'
 
-import { BatteryCharging, CircuitBoard, Satellite, Sun, Waves } from 'lucide-react'
+import { BatteryCharging, CircuitBoard, Satellite, Shield, Sun, Waves } from 'lucide-react'
 import type { MissionConfiguration, MissionEstimate, SpacecraftSize } from './mission-data'
-import { formatMass, formatMoney, getAntennaOptions, getBatteryOptions, getSolarOptions, INSTRUMENTS } from './mission-data'
+import { formatMass, formatMoney, getAntennaOptions, getBatteryOptions, getShieldingOptions, getSolarOptions, INSTRUMENTS } from './mission-data'
 
 interface EquipmentRow {
   id: string
@@ -17,12 +17,14 @@ interface EquipmentRow {
 export function MissionEquipmentList({ size, configuration, estimate }: { size: SpacecraftSize; configuration: MissionConfiguration; estimate: MissionEstimate }) {
   const solar = getSolarOptions(size).find((option) => option.id === configuration.solarId) ?? getSolarOptions(size)[0]
   const battery = getBatteryOptions(size).find((option) => option.id === configuration.batteryId) ?? getBatteryOptions(size)[0]
+  const shielding = getShieldingOptions(size).find((option) => option.id === configuration.shieldingId) ?? getShieldingOptions(size)[0]
   const antenna = getAntennaOptions(size).find((option) => option.id === configuration.antennaId) ?? getAntennaOptions(size)[0]
   const instruments = INSTRUMENTS.filter((instrument) => configuration.instrumentIds.includes(instrument.id))
   const rows: EquipmentRow[] = [
     { id: 'bus', name: 'Spacecraft bus', kind: 'Platform', massKg: size.busMassKg, powerW: size.busPowerW, costM: size.busCostM, Icon: CircuitBoard },
     { id: 'solar', name: solar.name, kind: 'Power', massKg: solar.massKg, powerW: solar.powerW, costM: solar.costM, Icon: Sun },
     { id: 'battery', name: battery.name, kind: 'Energy', massKg: battery.massKg, powerW: 0, costM: battery.costM, Icon: BatteryCharging },
+    { id: 'shielding', name: shielding.name, kind: 'Protection', massKg: shielding.massKg, powerW: 0, costM: shielding.costM, Icon: Shield },
     { id: 'antenna', name: antenna.name, kind: 'Comms', massKg: antenna.massKg, powerW: antenna.powerW, costM: antenna.costM, Icon: Waves },
     ...instruments.map((instrument) => ({ id: instrument.id, name: instrument.shortName, kind: 'Science', massKg: instrument.massKg, powerW: instrument.powerW, costM: instrument.costM, Icon: Satellite })),
   ]

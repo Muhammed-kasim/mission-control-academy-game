@@ -44,6 +44,7 @@ export interface EquipmentOption {
   wattHours?: number
   gbPerDay?: number
   lifetimeBonus?: number
+  protection?: number
   nasaReference: string
 }
 
@@ -64,6 +65,7 @@ export interface Instrument {
 export interface MissionConfiguration {
   solarId: string
   batteryId: string
+  shieldingId: string
   antennaId: string
   instrumentIds: string[]
   rocketId: string
@@ -220,6 +222,24 @@ const ANTENNA_OPTIONS: Record<SizeFamily, EquipmentOption[]> = {
   ],
 }
 
+const SHIELDING_OPTIONS: Record<SizeFamily, EquipmentOption[]> = {
+  cubesat: [
+    { id: 'none', name: 'No extra shield', description: 'Keep the CubeSat light and simple.', massKg: 0, powerW: 0, costM: 0, protection: 0, nasaReference: 'CubeSat structure' },
+    { id: 'light', name: 'Shielding blanket', description: 'A light layer for small debris impacts.', massKg: 0.2, powerW: 0, costM: 0.5, protection: 1, nasaReference: 'NASA spacecraft protection' },
+    { id: 'reinforced', name: 'Reinforced shield', description: 'A stronger bumper adds mass but more protection.', massKg: 0.45, powerW: 0, costM: 1.2, protection: 2, nasaReference: 'Whipple shield concept' },
+  ],
+  small: [
+    { id: 'none', name: 'No extra shield', description: 'Keep the spacecraft light and simple.', massKg: 0, powerW: 0, costM: 0, protection: 0, nasaReference: 'Spacecraft structure' },
+    { id: 'light', name: 'Shielding blanket', description: 'A light layer for small debris impacts.', massKg: 6, powerW: 0, costM: 6, protection: 1, nasaReference: 'NASA spacecraft protection' },
+    { id: 'reinforced', name: 'Reinforced shield', description: 'A stronger bumper adds mass but more protection.', massKg: 18, powerW: 0, costM: 20, protection: 2, nasaReference: 'Whipple shield concept' },
+  ],
+  large: [
+    { id: 'none', name: 'No extra shield', description: 'Keep the observatory light and simple.', massKg: 0, powerW: 0, costM: 0, protection: 0, nasaReference: 'Spacecraft structure' },
+    { id: 'light', name: 'Shielding blanket', description: 'A light layer for small debris impacts.', massKg: 75, powerW: 0, costM: 35, protection: 1, nasaReference: 'NASA spacecraft protection' },
+    { id: 'reinforced', name: 'Reinforced shield', description: 'A stronger bumper adds mass but more protection.', massKg: 200, powerW: 0, costM: 85, protection: 2, nasaReference: 'Whipple shield concept' },
+  ],
+}
+
 export const ROCKETS = [
   { id: 'rideshare', name: 'Rideshare', maker: 'CubeSats only', payloadKg: 12, costM: 1.2, orbitIds: ['leo', 'polar'], description: 'A low-cost launch slot for CubeSat missions.', nasaReference: 'NASA CubeSat Launch Initiative' },
   { id: 'electron', name: 'Electron', maker: 'Small launch vehicle', payloadKg: 300, costM: 7, orbitIds: ['leo', 'polar'], description: 'A dedicated ride to low Earth or polar orbit.', nasaReference: 'NASA launch service data' },
@@ -269,6 +289,10 @@ export function getAntennaOptions(size: SpacecraftSize) {
   return ANTENNA_OPTIONS[size.family]
 }
 
+export function getShieldingOptions(size: SpacecraftSize) {
+  return SHIELDING_OPTIONS[size.family]
+}
+
 export function getUserProduct(id: string) {
   return USER_PRODUCTS.find((product) => product.id === id) ?? USER_PRODUCTS[0]
 }
@@ -288,6 +312,7 @@ export function getDefaultConfiguration(mission: MissionProfile, size: Spacecraf
   return {
     solarId: 'deployable',
     batteryId: 'extended',
+    shieldingId: 'none',
     antennaId: 'medium-gain',
     instrumentIds,
     rocketId: size.family === 'cubesat' ? 'rideshare' : mission.id === 'mars' ? 'sls' : mission.id === 'moon' ? 'falcon9' : 'electron',
@@ -306,6 +331,7 @@ export function calculateMission(mission: MissionProfile, size: SpacecraftSize, 
   const solar = getSolarOptions(size).find((item) => item.id === config.solarId) ?? getSolarOptions(size)[0]
   const battery = getBatteryOptions(size).find((item) => item.id === config.batteryId) ?? getBatteryOptions(size)[0]
   const antenna = getAntennaOptions(size).find((item) => item.id === config.antennaId) ?? getAntennaOptions(size)[0]
+  const shielding = getShieldingOptions(size).find((item) => item.id === config.shieldingId) ?? getShieldingOptions(size)[0]
   const orbit = getOrbit(config.orbitId)
   const rocket = getRocket(config.rocketId)
   const selectedInstruments = INSTRUMENTS.filter((instrument) => config.instrumentIds.includes(instrument.id))
@@ -313,7 +339,7 @@ export function calculateMission(mission: MissionProfile, size: SpacecraftSize, 
   const instrumentMass = selectedInstruments.reduce((total, item) => total + item.massKg, 0)
   const instrumentPower = selectedInstruments.reduce((total, item) => total + item.powerW, 0)
   const instrumentCost = selectedInstruments.reduce((total, item) => total + item.costM, 0)
-  const spacecraftMassKg = size.busMassKg + solar.massKg + battery.massKg + antenna.massKg + instrumentMass
+  const spacecraftMassKg = size.busMassKg + solar.massKg + battery.massKg + shielding.massKg + antenna.massKg + instrumentMass
   const powerAvailableW = solar.watts! + battery.wattHours! / 24
   const powerDemandW = size.busPowerW + instrumentPower + antenna.powerW
   const stations = Math.max(1, Math.min(3, config.stations))
@@ -321,7 +347,7 @@ export function calculateMission(mission: MissionProfile, size: SpacecraftSize, 
   const communicationCapacityGbPerDay = antenna.gbPerDay! * (0.7 + stations * 0.25)
   const requiredDataGbPerDay = Math.max(8, scienceDataGb / 4)
   const lifetimeYears = orbit.lifetimeYears + (battery.lifetimeBonus ?? 0) + (solar.lifetimeBonus ?? 0)
-  const hardwareCostM = size.busCostM + solar.costM + battery.costM + antenna.costM + instrumentCost
+  const hardwareCostM = size.busCostM + solar.costM + battery.costM + shielding.costM + antenna.costM + instrumentCost
   const totalCostM = hardwareCostM + rocket.costM + stations * 2 + size.operationsCostM + userProduct.costM
   const budgetLimitM = getBudgetLimit(mission, size, difficulty)
   const messyDesignIssues: string[] = []
