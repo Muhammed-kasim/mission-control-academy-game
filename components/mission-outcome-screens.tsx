@@ -6,28 +6,30 @@ import type { GameStep, MissionCheck, MissionConfiguration, MissionEstimate, Mis
 import { formatMass, formatMoney, formatYears, getInstrument, getOrbit, getRocket, getUserProduct } from './mission-data'
 import { DataNote, NasaTag, PageHeading, PrimaryButton, SegmentPill, WarningBanner } from './mission-ui'
 
-export function MissionOutcomeScreen({ step, mission, size, configuration, estimate, checks, onBackToDesign, onLaunch, onReport, onRestart }: {
+export function MissionOutcomeScreen({ step, mission, size, configuration, estimate, checks, pointDesign, backLabel, onBackToDesign, onLaunch, onReport, onRestart }: {
   step: GameStep
   mission: MissionProfile
   size: SpacecraftSize
   configuration: MissionConfiguration
   estimate: MissionEstimate
   checks: MissionCheck[]
+  pointDesign: string
+  backLabel: string
   onBackToDesign: () => void
   onLaunch: () => void
   onReport: () => void
   onRestart: () => void
 }) {
   if (step === 'launch') return <LaunchSequence mission={mission} checks={checks} onReport={onReport} />
-  if (step === 'report') return <MissionReport mission={mission} size={size} configuration={configuration} estimate={estimate} checks={checks} onRestart={onRestart} />
+  if (step === 'report') return <MissionReport mission={mission} size={size} configuration={configuration} estimate={estimate} checks={checks} pointDesign={pointDesign} onRestart={onRestart} />
 
   const passed = checks.filter((check) => check.passed).length
   const allPassed = passed === checks.length
   return <main className="flow-screen outcome-screen">
-    <button className="back-link" onClick={onBackToDesign}><span>←</span> Return to spacecraft design</button>
-    <PageHeading eyebrow="05 — SYSTEMS REVIEW" title="Build & verify." description="Every requirement has a reason. Fix what you need, or test the design as it stands." icon={<Target aria-hidden="true" />} />
+    <button className="back-link" onClick={onBackToDesign}><span>←</span> {backLabel}</button>
+    <PageHeading eyebrow="CML 4 — POINT DESIGN" title="Build & verify your point design." description="Your selected design is the mission baseline. Check every requirement before the simulated launch." icon={<Target aria-hidden="true" />} />
     <WarningBanner checks={checks} />
-    <section className="verification-summary"><div className={`verification-score ${allPassed ? 'score-ready' : 'score-review'}`}><span className="score-ring"><strong>{passed}<small>/{checks.length}</small></strong></span><span><small>REQUIREMENTS PASSED</small><b>{allPassed ? 'Ready for launch' : 'Review your mission'}</b></span></div><div className="verification-meta"><span><Satellite aria-hidden="true" />{mission.name}</span><span><Orbit aria-hidden="true" />{getOrbit(configuration.orbitId).name}</span><span><Rocket aria-hidden="true" />{getRocket(configuration.rocketId).name}</span></div></section>
+    <section className="verification-summary"><div className={`verification-score ${allPassed ? 'score-ready' : 'score-review'}`}><span className="score-ring"><strong>{passed}<small>/{checks.length}</small></strong></span><span><small>REQUIREMENTS PASSED</small><b>{allPassed ? 'Ready for launch' : 'Review your mission'}</b></span></div><div className="verification-meta"><span><Sparkles aria-hidden="true" />{pointDesign}</span><span><Satellite aria-hidden="true" />{mission.name}</span><span><Orbit aria-hidden="true" />{getOrbit(configuration.orbitId).name}</span><span><Rocket aria-hidden="true" />{getRocket(configuration.rocketId).name}</span></div></section>
     <section className="checklist-section"><div className="checklist-heading"><div><span className="eyebrow">MISSION READINESS CHECKLIST</span><h2>{checks.length} checks across four mission segments</h2></div><NasaTag /></div>
       <div className="checklist-list">{checks.map((check, index) => <article key={check.id} className={`checklist-row ${check.passed ? 'check-pass' : 'check-fail'}`}>
         <span className="check-index">{String(index + 1).padStart(2, '0')}</span><span className="check-status-icon">{check.passed ? <CircleCheck aria-hidden="true" /> : <CircleX aria-hidden="true" />}</span><span className="check-copy"><b>{check.title}</b><small>{check.detail}</small></span><span className="check-segment">{check.segment}</span><span className={`status-label ${check.passed ? 'status-pass' : 'status-fail'}`}>{check.passed ? 'PASS' : 'FAIL'}</span>
@@ -63,7 +65,7 @@ function LaunchSequence({ mission, checks, onReport }: { mission: MissionProfile
   </main>
 }
 
-function MissionReport({ mission, size, configuration, estimate, checks, onRestart }: { mission: MissionProfile; size: SpacecraftSize; configuration: MissionConfiguration; estimate: MissionEstimate; checks: MissionCheck[]; onRestart: () => void }) {
+function MissionReport({ mission, size, configuration, estimate, checks, pointDesign, onRestart }: { mission: MissionProfile; size: SpacecraftSize; configuration: MissionConfiguration; estimate: MissionEstimate; checks: MissionCheck[]; pointDesign: string; onRestart: () => void }) {
   const passed = checks.filter((check) => check.passed).length
   const allPassed = passed === checks.length
   const readiness = Math.round((passed / checks.length) * 65 + Math.min(1, estimate.sciencePoints / 25) * 35)
@@ -73,7 +75,7 @@ function MissionReport({ mission, size, configuration, estimate, checks, onResta
   return <main className="flow-screen report-screen">
     <div className="report-kicker"><span><FileText aria-hidden="true" /> MISSION DEBRIEF / FINAL REPORT</span><span>ACADEMY SIMULATION · 01</span></div>
     <section className={`report-hero ${allPassed ? 'report-success' : 'report-review'}`}>
-      <div className="report-hero-copy"><span className="eyebrow">FLIGHT REPORT · {mission.shortName.toUpperCase()}</span><h1>{allPassed ? 'Mission accomplished.' : 'Mission data received.'}</h1><p>{allPassed ? 'Your mission met every success criteria. The science is ready for the people who need it.' : 'The spacecraft completed its simulated flight. Some design requirements were missed — review them before the next mission.'}</p><div className="report-mission-tags"><span><Satellite aria-hidden="true" />{size.name}</span><span><Orbit aria-hidden="true" />{getOrbit(configuration.orbitId).name}</span><span><Rocket aria-hidden="true" />{getRocket(configuration.rocketId).name}</span></div></div>
+      <div className="report-hero-copy"><span className="eyebrow">FLIGHT REPORT · {mission.shortName.toUpperCase()}</span><h1>{allPassed ? 'Mission accomplished.' : 'Mission data received.'}</h1><p>{allPassed ? 'Your mission met every success criteria. The science is ready for the people who need it.' : 'The spacecraft completed its simulated flight. Some design requirements were missed — review them before the next mission.'}</p><div className="report-mission-tags"><span><Sparkles aria-hidden="true" />{pointDesign}</span><span><Satellite aria-hidden="true" />{size.name}</span><span><Orbit aria-hidden="true" />{getOrbit(configuration.orbitId).name}</span><span><Rocket aria-hidden="true" />{getRocket(configuration.rocketId).name}</span></div></div>
       <div className="report-grade"><span>MISSION SCORE</span><strong>{grade}</strong><small>{readiness} / 100</small><span className="grade-caption">{passed} of {checks.length} checks passed</span></div>
     </section>
     <section className="report-metric-grid" aria-label="Mission results">

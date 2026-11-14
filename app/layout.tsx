@@ -4,7 +4,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Mission Control Academy | Space Mission Design Game',
-  description: 'Design a NASA-inspired space mission. Choose your spacecraft, balance science and systems, then build, verify, and launch in this beginner-friendly game.',
+  description: 'Design a NASA-inspired space mission through four Concept Maturity Levels. Compare alternatives, balance science, cost, and risk, then verify and launch.',
   applicationName: 'Mission Control Academy',
   generator: 'v0.app',
   icons: {

@@ -8,18 +8,22 @@ export function NasaTag({ children = 'NASA Data' }: { children?: string }) {
   return <span className="nasa-tag"><span className="nasa-tag-dot" />{children}</span>
 }
 
-const STEPS: { id: GameStep; label: string }[] = [
-  { id: 'mission', label: 'Mission' },
-  { id: 'size', label: 'Spacecraft' },
-  { id: 'requirements', label: 'Targets' },
-  { id: 'design', label: 'Design' },
-  { id: 'verify', label: 'Verify' },
-  { id: 'launch', label: 'Launch' },
-  { id: 'report', label: 'Report' },
+const CML_STAGES = [
+  { label: 'Cocktail Napkin', cml: 'CML 1' },
+  { label: 'Initial Feasibility', cml: 'CML 2' },
+  { label: 'Trade Space', cml: 'CML 3' },
+  { label: 'Point Design', cml: 'CML 4' },
 ]
 
+function getCmlStageIndex(step: GameStep) {
+  if (['mission', 'size', 'requirements'].includes(step)) return 0
+  if (['design', 'feasibility'].includes(step)) return 1
+  if (['alternative-a', 'alternative-b', 'trade-space'].includes(step)) return 2
+  return 3
+}
+
 export function GameHeader({ step, mission, size, onHome }: { step: GameStep; mission?: MissionProfile; size?: SpacecraftSize; onHome: () => void }) {
-  const stepIndex = STEPS.findIndex((item) => item.id === step)
+  const stepIndex = getCmlStageIndex(step)
   return (
     <header className="app-header">
       <a className="brand-lockup" href="#top" onClick={(event) => { event.preventDefault(); onHome() }} aria-label="Mission Control Academy home">
@@ -33,12 +37,12 @@ export function GameHeader({ step, mission, size, onHome }: { step: GameStep; mi
       <div className="header-context">
         {mission ? <><span className="context-icon"><Satellite aria-hidden="true" /></span><span className="context-text"><strong>{mission.shortName}</strong><small>{size?.name ?? 'Mission design'}</small></span></> : <span className="header-freeplay"><span /> NO LOGIN · FREEPLAY</span>}
       </div>
-      {step !== 'welcome' && <div className="stepper" aria-label="Mission progress">
-        {STEPS.map((item, index) => {
+      {step !== 'welcome' && <div className="stepper" aria-label="NASA Concept Maturity Level progress">
+        {CML_STAGES.map((item, index) => {
           const status = index < stepIndex ? 'done' : index === stepIndex ? 'current' : 'upcoming'
-          return <div className={`stepper-step stepper-${status}`} key={item.id} aria-current={status === 'current' ? 'step' : undefined}>
+          return <div className={`stepper-step stepper-${status}`} key={item.cml} aria-current={status === 'current' ? 'step' : undefined}>
             <span className="stepper-dot">{status === 'done' ? <Check aria-hidden="true" /> : String(index + 1).padStart(2, '0')}</span>
-            <span className="stepper-label">{item.label}</span>
+            <span className="stepper-label"><small>{item.cml}</small><strong>{item.label}</strong></span>
           </div>
         })}
       </div>}
