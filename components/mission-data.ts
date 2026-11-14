@@ -1,6 +1,6 @@
 export type MissionId = 'moon' | 'mars' | 'earth'
 export type SizeId = '1u' | '3u' | '6u' | 'small' | 'large'
-export type GameStep = 'welcome' | 'mission' | 'size' | 'requirements' | 'design' | 'feasibility' | 'alternative-a' | 'alternative-b' | 'trade-space' | 'verify' | 'launch' | 'report'
+export type GameStep = 'welcome' | 'sources' | 'mission' | 'size' | 'requirements' | 'design' | 'negotiation' | 'feasibility' | 'alternative-a' | 'alternative-b' | 'trade-space' | 'verify' | 'launch' | 'operations' | 'data-lab' | 'launch-failure' | 'report'
 export type DesignTab = 'space' | 'launch' | 'ground'
 export type SizeFamily = 'cubesat' | 'small' | 'large'
 export type DifficultyId = 'easy' | 'normal' | 'hard'
@@ -72,6 +72,24 @@ export interface MissionConfiguration {
   orbitId: string
   stations: number
   userId: string
+}
+
+export interface RocketAppearance {
+  bodyColor: string
+  stripeColor: string
+  noseShape: 'point' | 'rounded' | 'flat'
+  finStyle: 'classic' | 'swept' | 'compact'
+  flameColor: string
+  missionPatch: 'earth' | 'moon' | 'mars' | 'comet' | 'jupiter'
+}
+
+export const DEFAULT_ROCKET_APPEARANCE: RocketAppearance = {
+  bodyColor: '#e9edf0',
+  stripeColor: '#75e0cf',
+  noseShape: 'point',
+  finStyle: 'classic',
+  flameColor: '#ff9a54',
+  missionPatch: 'earth',
 }
 
 export interface MissionEstimate {

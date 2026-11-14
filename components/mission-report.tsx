@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BadgeCheck, BatteryCharging, CircleAlert, CircleCheck, FileText, Globe2, Rocket, Satellite, Sparkles, Trophy } from 'lucide-react'
 import { calculateMission, formatMass, formatMoney, formatYears, getAntennaOptions, getBatteryOptions, getOrbit, getRocket, getShieldingOptions, getSolarOptions, getUserProduct, type DifficultyId, type MissionCheck, type MissionConfiguration, type MissionEstimate, type MissionProfile, type SpacecraftSize } from './mission-data'
-import { calculateMissionScore, calculateRecoveredScienceData, type MissionScore, type MissionScoreItem, type SimulatedMissionEvent } from './mission-simulation'
+import { calculateMissionScore, calculateRecoveredScienceData, type LaunchResult, type MissionOperationsResult, type MissionScore, type MissionScoreItem, type SimulatedMissionEvent } from './mission-simulation'
+import { fetchNasaMissionImage, type NasaMissionImage } from './nasa-data'
+import { recordMissionProgress, starsForScore, type MissionProgression } from './mission-progression'
 import { MissionSpacecraftDiagram } from './mission-spacecraft-diagram'
 import { NasaTag, PrimaryButton } from './mission-ui'
 
@@ -13,6 +15,7 @@ interface LeaderboardEntry {
   id: string
   label: string
   score: number
+  maximum?: number
   timestamp: number
 }
 
@@ -33,19 +36,19 @@ function readLeaderboard() {
 
 function getSimilarMission(mission: MissionProfile, size: SpacecraftSize, configuration: MissionConfiguration) {
   if (mission.id === 'moon') {
-    return { name: 'Lunar Reconnaissance Orbiter (LRO)', reason: 'Like your mission, LRO maps the Moon and helps identify safe landing regions.' }
+    return { name: 'Lunar Reconnaissance Orbiter (LRO)', searchTerm: 'LRO', reason: 'Like your mission, LRO maps the Moon and helps identify safe landing regions.' }
   }
   if (mission.id === 'mars') {
     return configuration.instrumentIds.includes('magnetometer')
-      ? { name: 'MAVEN', reason: 'MAVEN studies how the Martian atmosphere changes and escapes into space.' }
-      : { name: 'Mars Reconnaissance Orbiter (MRO)', reason: 'MRO uses orbital instruments to map Mars and study its surface and atmosphere.' }
+      ? { name: 'MAVEN', searchTerm: 'MAVEN', reason: 'MAVEN studies how the Martian atmosphere changes and escapes into space.' }
+      : { name: 'Mars Reconnaissance Orbiter (MRO)', searchTerm: 'MRO', reason: 'MRO uses orbital instruments to map Mars and study its surface and atmosphere.' }
   }
   if (size.family === 'cubesat') {
-    return { name: 'TEMPEST-D CubeSat', reason: 'This NASA technology-demonstration CubeSat observed storms and the water cycle in Earth’s atmosphere.' }
+    return { name: 'TEMPEST-D CubeSat', searchTerm: 'CubeSat', reason: 'This NASA technology-demonstration CubeSat observed storms and the water cycle in Earth’s atmosphere.' }
   }
   return configuration.instrumentIds.includes('thermal')
-    ? { name: 'Terra', reason: 'Terra studies Earth’s land, atmosphere, and changing climate with multiple observing instruments.' }
-    : { name: 'Landsat', reason: 'Landsat records long-term changes in Earth’s land surface for science and planning.' }
+    ? { name: 'Terra', searchTerm: 'Terra', reason: 'Terra studies Earth’s land, atmosphere, and changing climate with multiple observing instruments.' }
+    : { name: 'Landsat', searchTerm: 'Landsat', reason: 'Landsat records long-term changes in Earth’s land surface for science and planning.' }
 }
 
 function getDesignSummary(configuration: MissionConfiguration, size: SpacecraftSize) {
@@ -80,7 +83,7 @@ function buildImprovementTips(events: SimulatedMissionEvent[], checks: MissionCh
   return tips.slice(0, 2)
 }
 
-export function MissionReport({ mission, size, difficulty, configuration, estimate, checks, pointDesign, alternativeA, alternativeB, events, runId, exploredTradeSpace, onTryAgain, onRestart }: {
+export function MissionReport({ mission, size, difficulty, configuration, estimate, checks, pointDesign, alternativeA, alternativeB, events, runId, exploredTradeSpace, teamMode, coordinationEarned, launchResult, operationsResult, progression, onProgressionChange, onTryAgain, onRestart }: {
   mission: MissionProfile
   size: SpacecraftSize
   difficulty: DifficultyId
@@ -93,11 +96,19 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
   events: SimulatedMissionEvent[]
   runId: string
   exploredTradeSpace: boolean
+  teamMode: boolean
+  coordinationEarned: boolean
+  launchResult?: LaunchResult
+  operationsResult?: MissionOperationsResult
+  progression: MissionProgression
+  onProgressionChange: (progression: MissionProgression) => void
   onTryAgain: () => void
   onRestart: () => void
 }) {
-  const score = useMemo(() => calculateMissionScore(estimate, size, checks, events, exploredTradeSpace), [estimate, size, checks, events, exploredTradeSpace])
-  const recoveredDataGb = calculateRecoveredScienceData(estimate, events)
+  const score = useMemo(() => calculateMissionScore(estimate, size, checks, events, exploredTradeSpace, teamMode, coordinationEarned, launchResult, operationsResult), [estimate, size, checks, events, exploredTradeSpace, teamMode, coordinationEarned, launchResult, operationsResult])
+  const scoreMaximum = score.items.reduce((total, item) => total + item.available, 0)
+  const flownLifetimeYears = (launchResult ? estimate.lifetimeYears * launchResult.lifetimeMultiplier : estimate.lifetimeYears) * (operationsResult ? 0.8 + operationsResult.batteryPercent / 500 : 1)
+  const recoveredDataGb = operationsResult ? Math.min(operationsResult.downloadedDataGb, calculateRecoveredScienceData(estimate, events)) : calculateRecoveredScienceData(estimate, events)
   const userProduct = getUserProduct(configuration.userId)
   const similarMission = getSimilarMission(mission, size, configuration)
   const passedChecks = checks.filter((check) => check.passed)
@@ -105,7 +116,10 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
   const survivedEvents = events.filter((event) => event.survived)
   const failedEvents = events.filter((event) => !event.survived)
   const improvementTips = buildImprovementTips(events, checks, exploredTradeSpace)
+  const earnedStars = Math.max(progression.missionStars[mission.id] ?? 0, starsForScore(score.total, scoreMaximum))
+  const missionSticker = mission.id === 'moon' ? '🌙 Moon explorer' : mission.id === 'mars' ? '🔴 Mars explorer' : '🌍 Earth helper'
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [missionImage, setMissionImage] = useState<NasaMissionImage | null>(null)
 
   useEffect(() => {
     const existing = readLeaderboard()
@@ -113,11 +127,13 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
       id: runId,
       label: `${mission.shortName} · ${size.name}`,
       score: score.total,
+      maximum: scoreMaximum,
       timestamp: Date.now(),
     }
     const nextLeaderboard = [...existing.filter((entry) => entry.id !== runId), currentFlight]
       .sort((left, right) => right.score - left.score || left.timestamp - right.timestamp)
       .slice(0, 10)
+    onProgressionChange(recordMissionProgress(mission.id, score.total, scoreMaximum))
     try {
       window.localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(nextLeaderboard))
     } catch {
@@ -125,7 +141,16 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
       return
     }
     setLeaderboard(nextLeaderboard)
-  }, [mission.shortName, runId, score.total, size.name])
+  }, [mission.id, mission.shortName, onProgressionChange, runId, score.total, scoreMaximum, size.name])
+
+  useEffect(() => {
+    let active = true
+    setMissionImage(null)
+    fetchNasaMissionImage(similarMission.searchTerm).then((image) => {
+      if (active) setMissionImage(image)
+    })
+    return () => { active = false }
+  }, [similarMission.searchTerm])
 
   const tradeOptions = useMemo(() => {
     if (alternativeA && alternativeB) {
@@ -143,10 +168,21 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
   return <main className="flow-screen report-screen mission-report-screen">
     <div className="report-kicker"><span><FileText aria-hidden="true" /> MISSION DEBRIEF / FINAL REPORT</span><span>FLIGHT {runId.slice(-6).toUpperCase()}</span></div>
     <section className={`report-hero ${score.total >= 70 ? 'report-success' : 'report-review'}`}>
-      <div className="report-hero-copy"><span className="eyebrow">MISSION REPORT · {mission.shortName.toUpperCase()}</span><h1>{score.total >= 70 ? 'A flight worth learning from.' : 'Every flight teaches the next.'}</h1><p>{mission.description} The score reflects science, requirements, resource choices, event survival, and whether you explored alternatives.</p><div className="report-mission-tags"><span><Sparkles aria-hidden="true" />{pointDesign}</span><span><Satellite aria-hidden="true" />{size.name}</span><span><Globe2 aria-hidden="true" />{getOrbit(configuration.orbitId).name}</span><span><Rocket aria-hidden="true" />{getRocket(configuration.rocketId).name}</span></div></div>
-      <div className="report-grade"><span>MISSION SCORE</span><strong>{score.total}</strong><small>OUT OF 100</small><span className="grade-caption">{survivedEvents.length} of {events.length} events contained</span></div>
+      <div className="report-hero-copy"><span className="eyebrow">MISSION COMPLETE · {mission.shortName.toUpperCase()}</span><h1>{score.total >= scoreMaximum * 0.7 ? 'You did it!' : 'Great try, explorer!'}</h1><p>You just did what real NASA teams do!</p><div className="report-mission-tags"><span><Sparkles aria-hidden="true" />{missionSticker} sticker</span><span><Satellite aria-hidden="true" />{size.name}</span><span><Rocket aria-hidden="true" />{getRocket(configuration.rocketId).name}</span></div></div>
+      <div className="report-grade"><span>MISSION SCORE</span><strong>{score.total}</strong><small>OUT OF {scoreMaximum}</small><span className="grade-caption">{survivedEvents.length} of {events.length} surprises handled</span></div>
     </section>
+    <section className="report-progression" aria-label="Mission progression">
+      <span className="progression-rank"><small>CAREER RANK</small><strong>{progression.rank}</strong></span>
+      <span className="progression-stars"><small>{mission.shortName.toUpperCase()} STARS</small><strong>{'★'.repeat(earnedStars)}{'☆'.repeat(3 - earnedStars)}</strong></span>
+      <span className="progression-unlocks"><small>UNLOCKS</small><strong>{[
+        ...progression.unlockedPaints.map((paint) => paint === 'arctic' ? 'Arctic paint' : 'Solar Gold paint'),
+        ...progression.unlockedMissionPatches.filter((patch) => patch !== 'earth').map((patch) => `${patch[0].toUpperCase()}${patch.slice(1)} patch`),
+      ].join(' · ') || 'Score missions to unlock rocket paints and patches.'}</strong></span>
+    </section>
+    <div className="report-quick-actions"><PrimaryButton variant="quiet" onClick={onTryAgain}>Fly again</PrimaryButton><PrimaryButton onClick={onRestart}>Pick a new planet</PrimaryButton></div>
 
+    <details className="report-more-details">
+      <summary>Curious? See the grown-up mission details.</summary>
     <div className="report-primary-grid">
       <ReportSection index="01" title="Concept summary" eyebrow="MISSION CONCEPT">
         <p className="report-concept-copy">{mission.description}</p>
@@ -157,13 +193,26 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
           <Resource label="Spacecraft mass" value={formatMass(estimate.spacecraftMassKg)} detail={`Limit ${formatMass(size.massLimitKg)}`} />
           <Resource label="Power balance" value={`${Math.round(estimate.powerAvailableW)} / ${Math.round(estimate.powerDemandW)} W`} detail="Available / demand" />
           <Resource label="Mission cost" value={formatMoney(estimate.totalCostM)} detail={`Budget ${formatMoney(estimate.budgetLimitM)}`} />
-          <Resource label="Science returned" value={`${Math.round(recoveredDataGb)} GB`} detail={`${Math.round(estimate.scienceDataGb)} GB before event losses`} />
-          <Resource label="Mission lifetime" value={formatYears(estimate.lifetimeYears)} detail={`Goal ${formatYears(mission.missionYears)}`} />
+          <Resource label="Science returned" value={`${Math.round(recoveredDataGb)} GB`} detail={operationsResult ? `${Math.round(operationsResult.downloadedDataGb)} GB downloaded · ${Math.round(estimate.scienceDataGb)} GB designed` : `${Math.round(estimate.scienceDataGb)} GB before event losses`} />
+          <Resource label="Mission lifetime" value={formatYears(flownLifetimeYears)} detail={operationsResult ? `${formatYears(estimate.lifetimeYears)} design · launch and ${operationsResult.batteryPercent}% final reserve applied` : `Goal ${formatYears(mission.missionYears)}`} />
           <Resource label="Ground network" value={`${configuration.stations} ${configuration.stations === 1 ? 'station' : 'stations'}`} detail={`${Math.round(estimate.communicationCapacityGbPerDay)} GB/day capacity`} />
         </div>
         <p className="report-hardware-line"><BatteryCharging aria-hidden="true" />{getDesignSummary(configuration, size)}</p>
       </ReportSection>
     </div>
+
+    {launchResult && <section className={`report-section report-flight-section ${launchResult.success ? '' : 'report-flight-failed'}`}>
+      <header className="report-flight-heading"><small className="eyebrow">PLAYABLE LAUNCH</small><h2>{launchResult.success ? 'Your flight, your trajectory.' : 'Launch failure review'}</h2><p>{launchResult.success ? 'Throttle, steering, and separation changed orbit accuracy, remaining fuel, and modeled mission life.' : launchResult.failureReason ?? 'The rocket failed to reach orbit.'}</p></header>
+      {launchResult.success
+        ? <div className="report-flight-metrics"><Resource label="Orbit accuracy" value={`${launchResult.orbitAccuracy}%`} detail="Gravity turn and separation quality" /><Resource label="Fuel margin" value={`${launchResult.fuelMargin}%`} detail="Propellant remaining after insertion" /><Resource label="Flight-skill bonus" value={`${Math.round(launchResult.score / 10)} / 10`} detail={`${launchResult.combo}× best combo · ${launchResult.score}/100 flight points`} /></div>
+        : <p className="report-flight-failure-copy">{launchResult.failureReason}</p>}
+      <div className="report-flight-phases">{launchResult.phases.map((result) => <span key={result.phase}><b>{result.phase.replace('-', ' ')}</b><strong>{result.grade}</strong></span>)}</div>
+    </section>}
+
+    {operationsResult && <section className="report-section report-operations-section">
+      <header className="report-flight-heading"><small className="eyebrow">PLAYABLE MISSION OPERATIONS</small><h2>Science made it home.</h2><p>{operationsResult.daysCompleted} fast-forward days · instruments produced {Math.round(operationsResult.scienceDataGb)} GB · {Math.round(operationsResult.downloadedDataGb)} GB downlinked · final battery reserve {operationsResult.batteryPercent}%.</p></header>
+      <div className="report-operations-meter"><i style={{ width: `${Math.min(100, recoveredDataGb / Math.max(1, estimate.dataTargetGb) * 100)}%` }} /></div>
+    </section>}
 
     <section className="report-section report-trade-section">
       <SectionHeading index="03" eyebrow="DESIGN DECISIONS" title="Trade tree" detail={exploredTradeSpace ? 'Two alternatives were compared before the final choice.' : 'Comparison skipped. These two modeled directions show what to explore next.'} />
@@ -188,8 +237,8 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
         </article>)}</div>
       </section>
       <section className="report-section report-score-section">
-        <SectionHeading index="05" eyebrow="100-POINT RUBRIC" title="Score breakdown" detail="Each category has a fixed maximum weight." />
-        <ScoreBreakdown items={score.items} total={score.total} />
+        <SectionHeading index="05" eyebrow="MISSION SCORE RUBRIC" title="Score breakdown" detail="Existing design and team categories remain, with a flight-skill bonus." />
+        <ScoreBreakdown items={score.items} total={score.total} maximum={scoreMaximum} />
       </section>
     </div>
 
@@ -220,17 +269,24 @@ export function MissionReport({ mission, size, difficulty, configuration, estima
       </section>
       <section className="report-section report-real-mission-section">
         <SectionHeading index="10" eyebrow="REAL-WORLD CONNECTION" title="Similar real NASA mission" detail="A mission with a related goal or instrument approach." />
-        <div className="real-mission-card"><span className="real-mission-icon"><Globe2 aria-hidden="true" /></span><div><span className="eyebrow">NASA MISSION REFERENCE</span><h3>{similarMission.name}</h3><p>{similarMission.reason}</p></div></div>
+        <div className="real-mission-card">
+          {missionImage
+            ? <img className="real-mission-image" src={missionImage.imageUrl} alt={missionImage.title} onError={() => setMissionImage(null)} />
+            : <span className="real-mission-icon"><Globe2 aria-hidden="true" /></span>}
+          <div><span className="eyebrow">NASA MISSION REFERENCE</span><h3>{similarMission.name}</h3><p>{similarMission.reason}</p>
+            {missionImage && <><small className="real-mission-image-title">{missionImage.title}</small><small className="real-mission-image-credit">Image: NASA</small></>}
+          </div>
+        </div>
         <div className="report-source-note"><NasaTag /><span>Game values are simplified for learning and are not NASA engineering estimates.</span></div>
       </section>
     </div>
 
     <section className="report-section report-leaderboard-section">
       <SectionHeading index="11" eyebrow="LOCAL FLIGHT RECORDS" title="Best mission scores" detail="Saved only in this browser. No account or server upload." />
-      {leaderboard.length ? <ol className="mission-leaderboard">{leaderboard.map((entry, index) => <li className={entry.id === runId ? 'leaderboard-current' : ''} key={entry.id}><span className="leaderboard-rank">{index === 0 ? <Trophy aria-label="Top score" /> : String(index + 1).padStart(2, '0')}</span><span className="leaderboard-name">{entry.label}<small>{new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(entry.timestamp)}</small></span><strong>{entry.score}<small> / 100</small></strong></li>)}</ol> : <p className="leaderboard-empty">Complete a flight to add its score to this browser’s board.</p>}
+      {leaderboard.length ? <ol className="mission-leaderboard">{leaderboard.map((entry, index) => <li className={entry.id === runId ? 'leaderboard-current' : ''} key={entry.id}><span className="leaderboard-rank">{index === 0 ? <Trophy aria-label="Top score" /> : String(index + 1).padStart(2, '0')}</span><span className="leaderboard-name">{entry.label}<small>{new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(entry.timestamp)}</small></span><strong>{entry.score}<small> / {entry.maximum ?? 100}</small></strong></li>)}</ol> : <p className="leaderboard-empty">Complete a flight to add its score to this browser’s board.</p>}
     </section>
 
-    <div className="report-actions mission-report-actions"><span><NasaTag /><span>Try Again reruns the simulation with this exact design and a new set of random events.</span></span><div><PrimaryButton variant="quiet" onClick={onTryAgain}>Try Again</PrimaryButton><PrimaryButton onClick={onRestart}>Design another mission</PrimaryButton></div></div>
+    </details>
   </main>
 }
 
@@ -250,7 +306,7 @@ function Resource({ label, value, detail }: { label: string; value: string; deta
   return <div className="report-resource"><small>{label}</small><strong>{value}</strong><span>{detail}</span></div>
 }
 
-function ScoreBreakdown({ items, total }: { items: MissionScoreItem[]; total: MissionScore['total'] }) {
-  return <div className="report-score-breakdown"><ol>{items.map((item) => <li key={item.id}><div className="score-row-heading"><span>{item.label}</span><strong>{item.earned}<small> / {item.available}</small></strong></div><div className="score-track" aria-hidden="true"><i style={{ width: `${item.earned / item.available * 100}%` }} /></div><small>{item.detail}</small></li>)}</ol><div className="score-total-row"><span>FINAL SCORE</span><strong>{total}<small> / 100</small></strong></div></div>
+function ScoreBreakdown({ items, total, maximum }: { items: MissionScoreItem[]; total: MissionScore['total']; maximum: number }) {
+  return <div className="report-score-breakdown"><ol>{items.map((item) => <li key={item.id}><div className="score-row-heading"><span>{item.label}</span><strong>{item.earned}<small> / {item.available}</small></strong></div><div className="score-track" aria-hidden="true"><i style={{ width: `${item.earned / item.available * 100}%` }} /></div><small>{item.detail}</small></li>)}</ol><div className="score-total-row"><span>FINAL SCORE</span><strong>{total}<small> / {maximum}</small></strong></div></div>
 }
 

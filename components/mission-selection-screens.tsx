@@ -1,22 +1,33 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowUpRight, Check, Clock3, Compass, Crosshair, Globe2, Moon, Orbit, RadioTower, Satellite, Sparkles, Target } from 'lucide-react'
+import { ArrowUpRight, BookOpen, Check, Clock3, Compass, Crosshair, Globe2, Moon, Orbit, RadioTower, Satellite, Sparkles, Target } from 'lucide-react'
 import type { DifficultyId, MissionProfile, SpacecraftSize } from './mission-data'
 import { DIFFICULTIES, getBudgetLimit, MISSIONS, SPACECRAFT_SIZES } from './mission-data'
-import { WhyButton } from './mission-choice-help'
+import { ChoiceWithWhy, WhyButton } from './mission-choice-help'
 import { DataNote, NasaTag, PageHeading, PrimaryButton } from './mission-ui'
+import type { PlayMode } from './team-mode'
 
-export function WelcomeScreen({ onPlay, difficulty, onDifficultyChange }: { onPlay: () => void; difficulty: DifficultyId; onDifficultyChange: (difficulty: DifficultyId) => void }) {
+export function WelcomeScreen({ onPlay, onSources, difficulty, onDifficultyChange, playMode, playerCount, onPlayModeChange, onPlayerCountChange, sandboxEnabled, onSandboxChange, highContrast, onHighContrastChange, threeDEnabled, onThreeDChange }: { onPlay: () => void; onSources: () => void; difficulty: DifficultyId; onDifficultyChange: (difficulty: DifficultyId) => void; playMode: PlayMode; playerCount: number; onPlayModeChange: (mode: PlayMode) => void; onPlayerCountChange: (count: number) => void; sandboxEnabled: boolean; onSandboxChange: (enabled: boolean) => void; highContrast: boolean; onHighContrastChange: (enabled: boolean) => void; threeDEnabled: boolean; onThreeDChange: (enabled: boolean) => void }) {
   const [showTutorial, setShowTutorial] = useState(false)
   return <main className="welcome-screen" id="top">
     <div className="welcome-copy">
-      <div className="challenge-label"><span className="challenge-orbit"><Globe2 aria-hidden="true" /></span><span>NASA SPACE APPS CHALLENGE<span className="challenge-subline">SPACE MISSION DESIGN GAME</span></span></div>
-      <div className="welcome-title-wrap"><p className="eyebrow">MISSION CONTROL ACADEMY <span className="eyebrow-rule" /></p><h1>Design a mission.<br /><em>Change a world.</em></h1></div>
-      <p className="welcome-description">From the first launch decision to the science data reaching Earth — build a complete space mission, one smart choice at a time.</p>
-      <div className="welcome-actions"><button className="play-button" onClick={onPlay}><span className="play-icon"><Sparkles aria-hidden="true" /></span>Start your mission<ArrowUpRight aria-hidden="true" /></button><button className="tutorial-toggle" type="button" aria-expanded={showTutorial} onClick={() => setShowTutorial((current) => !current)}><Clock3 aria-hidden="true" />{showTutorial ? 'Close tutorial' : '1-minute tutorial'}</button><span className="play-meta">No account needed <i /> Beginner friendly</span></div>
+      <div className="challenge-label"><span className="challenge-orbit"><Globe2 aria-hidden="true" /></span><span>SPACE ADVENTURE<span className="challenge-subline">A GAME FOR CURIOUS EXPLORERS</span></span></div>
+      <div className="welcome-title-wrap"><p className="eyebrow">MEET NOVA, YOUR ROBOT GUIDE <span className="eyebrow-rule" /></p><h1>Build a rocket.<br /><em>Help a planet.</em></h1></div>
+      <p className="welcome-description">Pick a planet, build a ship, and bring home its discoveries.</p>
+      <div className="welcome-actions"><button className="play-button" onClick={onPlay}><span className="play-icon"><Sparkles aria-hidden="true" /></span>Start an adventure<ArrowUpRight aria-hidden="true" /></button><button className="tutorial-toggle" type="button" aria-expanded={showTutorial} onClick={() => setShowTutorial((current) => !current)}><Clock3 aria-hidden="true" />{showTutorial ? 'Hide how to play' : 'How to play'}</button><button className="tutorial-toggle sources-toggle" type="button" onClick={onSources}><BookOpen aria-hidden="true" />Real NASA stories</button></div>
+      <section className="play-mode-setup" aria-label="Choose solo or team mode">
+        <div className="play-mode-heading"><span><b>Pick your crew</b><small>Play alone or share one screen with friends.</small></span><span className="eyebrow">CREW</span></div>
+        <div className="play-mode-options" role="group" aria-label="Play mode">
+          <button type="button" className={playMode === 'solo' ? 'play-mode-selected' : ''} onClick={() => onPlayModeChange('solo')} aria-pressed={playMode === 'solo'}><strong>Play alone</strong><small>One player, all jobs</small></button>
+          <button type="button" className={playMode === 'team' ? 'play-mode-selected' : ''} onClick={() => onPlayModeChange('team')} aria-pressed={playMode === 'team'}><strong>Play together</strong><small>Up to four players</small></button>
+        </div>
+        {playMode === 'team' && <div className="player-count-options" role="group" aria-label="Number of team players">
+          <span>HOW MANY?</span>{[1, 2, 3, 4].map((count) => <button type="button" key={count} className={count === playerCount ? 'player-count-selected' : ''} onClick={() => onPlayerCountChange(count)} aria-pressed={count === playerCount}>{count}</button>)}
+        </div>}
+      </section>
       <section className="welcome-difficulty" aria-labelledby="difficulty-title">
-        <div className="difficulty-heading"><span><b id="difficulty-title">Set your challenge</b><small>Difficulty changes budget room, not mission physics.</small></span><span className="difficulty-setting-label">BUDGET SETTING</span></div>
+        <div className="difficulty-heading"><span><b id="difficulty-title">Pick a challenge</b><small>This changes how much game money you get.</small></span><span className="difficulty-setting-label">MONEY</span></div>
         <div className="difficulty-options" role="radiogroup" aria-label="Mission budget difficulty">
           {DIFFICULTIES.map((option) => <div className="difficulty-choice-wrap" key={option.id}>
             <button type="button" className={`difficulty-choice ${difficulty === option.id ? 'difficulty-selected' : ''}`} role="radio" aria-checked={difficulty === option.id} onClick={() => onDifficultyChange(option.id)}>
@@ -26,13 +37,21 @@ export function WelcomeScreen({ onPlay, difficulty, onDifficultyChange }: { onPl
           </div>)}
         </div>
       </section>
+      <section className="game-accessibility-settings" aria-label="Game settings">
+        <label><input type="checkbox" checked={sandboxEnabled} onChange={(event) => onSandboxChange(event.currentTarget.checked)} /><span><b>Free build (sandbox)</b><small>Build anything. No game limits.</small></span></label>
+        <label><input type="checkbox" checked={highContrast} onChange={(event) => onHighContrastChange(event.currentTarget.checked)} /><span><b>High contrast</b><small>Increase panel and control contrast.</small></span></label>
+        <label><input type="checkbox" checked={threeDEnabled} onChange={(event) => onThreeDChange(event.currentTarget.checked)} /><span><b>3D view</b><small>Optional. The game starts in 2D.</small></span></label>
+      </section>
       {showTutorial && <section className="tutorial-panel" aria-label="One-minute tutorial">
-        <div className="tutorial-panel-heading"><span className="eyebrow">YOUR ONE-MINUTE FLIGHT PLAN</span><b>Four stages. One mission.</b></div>
+        <div className="tutorial-panel-heading"><span className="eyebrow">HOW TO PLAY</span><b>Seven fun steps!</b></div>
         <ol>
-          <li><b>CML 1 · Cocktail Napkin</b><span>Pick a science goal and spacecraft size.</span></li>
-          <li><b>CML 2 · Initial Feasibility</b><span>Add the main parts and check if they work.</span></li>
-          <li><b>CML 3 · Trade Space</b><span>Build two alternatives and compare science, cost, and risk.</span></li>
-          <li><b>CML 4 · Point Design</b><span>Choose one design, verify it, then launch.</span></li>
+          <li><b>Pick a planet</b><span>Choose where to explore.</span></li>
+          <li><b>Pick a ship size</b><span>Small or big—it is your choice.</span></li>
+          <li><b>Build your ship</b><span>Add science tools and power.</span></li>
+          <li><b>Pick a rocket</b><span>Make sure it can reach your planet.</span></li>
+          <li><b>Pick message stations</b><span>Choose how many help send science home.</span></li>
+          <li><b>Fly and help</b><span>Control the launch and care for your ship.</span></li>
+          <li><b>Get your stars</b><span>See what your mission discovered.</span></li>
         </ol>
       </section>}
       <div className="segment-overview" aria-label="Four mission segments">
@@ -44,17 +63,11 @@ export function WelcomeScreen({ onPlay, difficulty, onDifficultyChange }: { onPl
       <div className="orbit-path orbit-path-one" /><div className="orbit-path orbit-path-two" />
       <div className="art-earth"><span className="earth-glow" /><span className="earth-surface" /><span className="earth-cloud earth-cloud-one" /><span className="earth-cloud earth-cloud-two" /></div>
       <div className="art-satellite"><span className="satellite-wing satellite-wing-left" /><span className="satellite-core"><Satellite /></span><span className="satellite-wing satellite-wing-right" /><span className="satellite-antenna" /></div>
-      <span className="art-coordinate art-coordinate-one">34° 42′ N<br />127° 29′ E</span><span className="art-coordinate art-coordinate-two">MISSION 01 / ORBITAL INSERTION</span>
+      <span className="art-coordinate art-coordinate-one">🌍 EARTH<br />🌙 MOON<br />🔴 MARS</span><span className="art-coordinate art-coordinate-two">PICK YOUR SPACE ADVENTURE</span>
       <span className="art-star art-star-one" /><span className="art-star art-star-two" /><span className="art-star art-star-three" /><span className="art-star art-star-four" />
-      <div className="orbit-readout"><span className="readout-live"><i /> SYSTEM NOMINAL</span><strong>400 <small>km</small></strong><span>LOW EARTH ORBIT</span></div>
-      <div className="art-caption">A new mission<br />is taking shape.</div>
+      <div className="orbit-readout"><span className="readout-live"><i /> READY, EXPLORER!</span><strong>Let’s go!</strong><span>THE STARS ARE WAITING</span></div>
+      <div className="art-caption">Your robot<br />is ready!</div>
     </div>
-    <section className="welcome-foot">
-      <div><span className="foot-index">01 / CHOOSE</span><strong>Pick a real-world inspired mission</strong><small>Moon, Mars, or Earth science</small></div>
-      <div><span className="foot-index">02 / DESIGN</span><strong>Balance the mission segments</strong><small>Launch · Space · Ground · User</small></div>
-      <div><span className="foot-index">03 / DISCOVER</span><strong>Build, verify, and launch</strong><small>See how your choices add up</small></div>
-      <DataNote />
-    </section>
   </main>
 }
 
@@ -63,55 +76,59 @@ const MISSION_ICONS = { moon: Moon, mars: Crosshair, earth: Globe2 }
 export function MissionSelectionScreen({ selectedId, onSelect, onBack }: { selectedId: string; onSelect: (mission: MissionProfile) => void; onBack: () => void }) {
   return <section className="flow-screen">
     <button className="back-link" onClick={onBack}><span>←</span> Back to academy</button>
-    <PageHeading eyebrow="CML 1 — COCKTAIL NAPKIN · MISSION GOAL" title="What will you explore?" description="Choose a mission inspired by a real NASA science program." icon={<Compass aria-hidden="true" />} />
+    <PageHeading eyebrow="STEP 1 · PICK A PLANET" title="Where should we go?" description="Choose a planet for our space adventure." icon={<Compass aria-hidden="true" />} />
     <div className="mission-choice-grid">
       {MISSIONS.map((mission, index) => {
         const Icon = MISSION_ICONS[mission.id]
         const active = mission.id === selectedId
-        return <div className="mission-choice-wrap" key={mission.id}>
+        const kidMissionName = mission.id === 'moon' ? 'Moon explorer' : mission.id === 'mars' ? 'Mars weather watcher' : 'Earth helper'
+        const kidScienceGoal = mission.id === 'moon'
+          ? 'Map the Moon and find safe places to land.'
+          : mission.id === 'mars'
+            ? 'Watch Mars dust, clouds, and weather.'
+            : 'Track Earth’s land and changing climate.'
+        return <ChoiceWithWhy className="mission-choice-wrap" key={mission.id} impact={{ mass: 'No spacecraft part changes yet.', power: 'No direct power change.', cost: 'Sets the money available for this planet.', data: `${mission.minDataGb} GB is the science goal. ${mission.description} NASA example: ${mission.reference}.`, lifetime: `${mission.missionYears} years is the planned mission life.` }}>
           <button className={`mission-choice mission-${mission.accent} ${active ? 'choice-selected' : ''}`} onClick={() => onSelect(mission)} aria-pressed={active}>
             <span className="mission-card-top"><span className="mission-index">MISSION 0{index + 1}</span><span className="mission-choice-icon"><Icon aria-hidden="true" /></span></span>
-            <span className="mission-title">{mission.name}</span><span className="mission-subtitle">{mission.subtitle}</span>
-            <span className="mission-description">{mission.description}</span>
-            <span className="mission-focus"><Target aria-hidden="true" />{mission.science}</span>
-            <span className="mission-source"><NasaTag /> <span>{mission.reference}</span></span>
-            <span className="mission-select-line">{active ? <><Check aria-hidden="true" /> SELECTED — CONTINUE</> : <>SELECT MISSION <ArrowUpRight aria-hidden="true" /></>}</span>
+            <span className="mission-title">{kidMissionName}</span><span className="mission-subtitle">{mission.subtitle}</span>
+            <span className="mission-description">{kidScienceGoal}</span>
+            <span className="mission-focus"><Target aria-hidden="true" />Pick this space trip!</span>
+            <span className="mission-select-line">{active ? <><Check aria-hidden="true" /> LET'S GO!</> : <>PICK THIS PLANET <ArrowUpRight aria-hidden="true" /></>}</span>
           </button>
-          <WhyButton impact={{ mass: 'No spacecraft part changes yet.', power: 'No direct power change.', cost: `Sets the mission budget cap for this destination.`, data: `${mission.minDataGb} GB of science data is the minimum goal.`, lifetime: `${mission.missionYears} years is the planned mission life.` }} />
-        </div>
+        </ChoiceWithWhy>
       })}
     </div>
-    <div className="bottom-hint"><span className="hint-rule" /> YOUR MISSION WILL DEFINE ITS SCIENCE TARGETS <span className="hint-rule" /></div>
+    <div className="bottom-hint"><span className="hint-rule" /> PICK THE PLACE THAT MAKES YOU CURIOUS <span className="hint-rule" /></div>
   </section>
 }
 
 export function SizeSelectionScreen({ selectedId, onSelect, onBack }: { selectedId: string; onSelect: (size: SpacecraftSize) => void; onBack: () => void }) {
   return <section className="flow-screen">
     <button className="back-link" onClick={onBack}><span>←</span> Change destination</button>
-    <PageHeading eyebrow="CML 1 — COCKTAIL NAPKIN · SPACECRAFT SIZE" title="How big is your mission?" description="Start with the right platform. Every spacecraft comes with a different mass and power envelope." icon={<Satellite aria-hidden="true" />} />
-    <div className="size-section-label"><span>CUBESAT</span><i /><small>Small enough to share a ride</small></div>
+    <PageHeading eyebrow="STEP 2 · PICK A SHIP SIZE" title="Big ship or little ship?" description="Small ships are nimble. Big ships can carry more science tools." icon={<Satellite aria-hidden="true" />} />
+    <div className="size-section-label"><span>TINY SHIPS</span><i /><small>Small enough to share a rocket</small></div>
     <div className="size-choice-grid size-cubesat-grid">
       {SPACECRAFT_SIZES.filter((size) => size.family === 'cubesat').map((size, index) => <SizeCard key={size.id} size={size} index={index} selectedId={selectedId} onSelect={onSelect} />)}
     </div>
     <div className="size-choice-grid size-large-grid">
       {SPACECRAFT_SIZES.filter((size) => size.family !== 'cubesat').map((size, index) => <SizeCard key={size.id} size={size} index={index + 3} selectedId={selectedId} onSelect={onSelect} />)}
     </div>
-    <div className="size-footnote"><NasaTag /> <span>CubeSat mass limits use the game-scale values requested: 1U ≈ 1.33 kg · 3U ≈ 4 kg · 6U ≈ 12 kg.</span></div>
+    <div className="size-footnote"><span>Choose the size that feels right. Nova will help with the rest.</span></div>
   </section>
 }
 
 function SizeCard({ size, index, selectedId, onSelect }: { size: SpacecraftSize; index: number; selectedId: string; onSelect: (size: SpacecraftSize) => void }) {
   const selected = selectedId === size.id
-  return <div className="size-choice-wrap">
+  const kidSizeName = size.id === '1u' ? 'Tiny CubeSat' : size.id === '3u' ? 'Small CubeSat' : size.id === '6u' ? 'Roomy CubeSat' : size.id === 'small' ? 'Small satellite' : 'Big observatory'
+  const kidSizeDescription = size.id === '1u' ? 'A tiny, simple ship' : size.id === '3u' ? 'A little room for science' : size.id === '6u' ? 'More room for science' : size.id === 'small' ? 'A flexible space ship' : 'A very big ship'
+  return <ChoiceWithWhy className="size-choice-wrap" impact={{ mass: `The bus starts at ${size.busMassKg} kg, with ${size.massLimitKg.toLocaleString()} kg maximum.`, power: `The spacecraft bus provides ${size.busPowerW} W before solar and battery upgrades.`, cost: `Bus: $${size.busCostM}M; operations: $${size.operationsCostM}M.`, data: `A larger platform carries more equipment, but does not create science data by itself. ${size.detail}`, lifetime: 'The platform size does not directly change mission life.' }}>
     <button className={`size-choice size-${size.family} ${selected ? 'choice-selected' : ''}`} onClick={() => onSelect(size)} aria-pressed={selected}>
-      <span className="size-card-header"><span className="size-card-num">PLATFORM / 0{index + 1}</span><span className="size-icon"><Satellite aria-hidden="true" /></span></span>
-      <strong>{size.name}</strong><span className="size-dimension">{size.detail}</span>
-      <span className="size-mass"><b>{size.massLimitKg < 100 ? `${size.massLimitKg} kg` : `${size.massLimitKg.toLocaleString()} kg`}</b><small>MAX SPACECRAFT MASS</small></span>
-      <span className="size-card-foot"><span>{size.recommendedFor}</span>{selected ? <Check aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}</span>
-      <NasaTag />
+      <span className="size-card-header"><span className="size-card-num">{index < 3 ? 'TINY SHIP' : 'BIG SHIP'}</span><span className="size-icon"><Satellite aria-hidden="true" /></span></span>
+      <strong>{kidSizeName}</strong><span className="size-dimension">{kidSizeDescription}</span>
+      <span className="size-mass"><b>{size.family === 'cubesat' ? 'Easy to carry' : 'Room for more tools'}</b><small>SHIP SIZE</small></span>
+      <span className="size-card-foot"><span>{size.family === 'cubesat' ? 'Small and nimble' : 'Carry more parts'}</span>{selected ? <Check aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}</span>
     </button>
-    <WhyButton impact={{ mass: `The bus starts at ${size.busMassKg} kg, with ${size.massLimitKg.toLocaleString()} kg maximum.`, power: `The spacecraft bus provides ${size.busPowerW} W before solar and battery upgrades.`, cost: `Bus: $${size.busCostM}M; operations: $${size.operationsCostM}M.`, data: 'A larger platform carries more equipment, but does not create science data by itself.', lifetime: 'The platform size does not directly change mission life.' }} />
-  </div>
+  </ChoiceWithWhy>
 }
 
 export function RequirementsScreen({ mission, size, difficulty, onContinue, onBack }: { mission: MissionProfile; size: SpacecraftSize; difficulty: DifficultyId; onContinue: () => void; onBack: () => void }) {
@@ -119,14 +136,14 @@ export function RequirementsScreen({ mission, size, difficulty, onContinue, onBa
   const difficultyName = DIFFICULTIES.find((option) => option.id === difficulty)?.name ?? 'Normal'
   return <section className="flow-screen">
     <button className="back-link" onClick={onBack}><span>←</span> Change spacecraft class</button>
-    <PageHeading eyebrow="CML 1 — COCKTAIL NAPKIN · MISSION BRIEFING" title="Your mission targets." description="Your goal, spacecraft size, and budget set the boundaries for the first design." icon={<Target aria-hidden="true" />} />
+    <PageHeading eyebrow="GET READY" title="Your space adventure!" description="Here is what our ship needs to do." icon={<Target aria-hidden="true" />} />
     <div className="requirements-context"><span className="context-star">✳</span><span><small>MISSION BRIEFING</small><strong>{mission.name}</strong></span><span className="context-divider" /><span><small>SPACECRAFT</small><strong>{size.name}</strong></span><span className="context-divider" /><span><small>DIFFICULTY</small><strong>{difficultyName}</strong></span><span className="context-orbit"><Orbit aria-hidden="true" /> {mission.targetOrbit === 'polar' ? 'Polar / Sun-synchronous' : mission.targetOrbit === 'lunar' ? 'Lunar orbit' : 'Mars science orbit'}</span></div>
     <div className="requirements-grid">
-      <article className="requirement-card req-data"><span className="req-label"><span>REQUIREMENT 01</span><NasaTag /></span><span className="req-icon"><RadioTower aria-hidden="true" /></span><strong className="req-value">{mission.minDataGb}<small> GB</small></strong><h2>Minimum science data</h2><p>Return enough usable data to answer the mission&apos;s science question.</p><span className="req-target"><span>MISSION GOAL</span><b>{mission.science}</b></span></article>
-      <article className="requirement-card req-mass"><span className="req-label"><span>REQUIREMENT 02</span><NasaTag /></span><span className="req-icon"><Satellite aria-hidden="true" /></span><strong className="req-value">{size.massLimitKg < 100 ? size.massLimitKg : size.massLimitKg.toLocaleString()}<small> kg</small></strong><h2>Maximum spacecraft mass</h2><p>Everything in the spacecraft bus and science payload counts toward this limit.</p><span className="req-target"><span>PLATFORM LIMIT</span><b>{size.name}</b></span></article>
-      <article className="requirement-card req-budget"><span className="req-label"><span>REQUIREMENT 03</span><NasaTag /></span><span className="req-icon"><Sparkles aria-hidden="true" /></span><strong className="req-value">${budget.toLocaleString()}<small> M</small></strong><h2>Maximum mission budget</h2><p>Cover launch, hardware, ground stations, user data products, and operations.</p><span className="req-target"><span>MISSION LIFETIME</span><b>{mission.missionYears} years</b></span></article>
+      <article className="requirement-card req-data"><span className="req-label"><span>OUR SCIENCE GOAL</span><NasaTag /></span><span className="req-icon"><RadioTower aria-hidden="true" /></span><strong className="req-value">{mission.minDataGb}<small> GB</small></strong><h2>Discover something new</h2><p>Bring home enough science to answer our big question.</p><span className="req-target"><span>WHAT WE'LL LEARN</span><b>{mission.science}</b></span></article>
+      <article className="requirement-card req-mass"><span className="req-label"><span>OUR SHIP SIZE</span><NasaTag /></span><span className="req-icon"><Satellite aria-hidden="true" /></span><strong className="req-value">{size.massLimitKg < 100 ? size.massLimitKg : size.massLimitKg.toLocaleString()}<small> kg</small></strong><h2>How much can we carry?</h2><p>All the parts and tools must fit on this ship.</p><span className="req-target"><span>OUR SHIP</span><b>{size.name}</b></span></article>
+      <article className="requirement-card req-budget"><span className="req-label"><span>OUR GAME MONEY</span><NasaTag /></span><span className="req-icon"><Sparkles aria-hidden="true" /></span><strong className="req-value">${budget.toLocaleString()}<small> M</small></strong><h2>Money for our adventure</h2><p>Choose parts without spending all our coins.</p><span className="req-target"><span>MISSION LENGTH</span><b>{mission.missionYears} years</b></span></article>
     </div>
-    <div className="requirements-footer"><span className="requirements-note"><Check aria-hidden="true" /> Your live telemetry will update as you design.</span><PrimaryButton onClick={onContinue}>Begin initial design</PrimaryButton></div>
+    <div className="requirements-footer"><span className="requirements-note"><Check aria-hidden="true" /> Nova will help us build a ship.</span><PrimaryButton onClick={onContinue}>Build our ship</PrimaryButton></div>
     <DataNote />
   </section>
 }

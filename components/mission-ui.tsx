@@ -8,18 +8,14 @@ export function NasaTag({ children = 'NASA Data' }: { children?: string }) {
   return <span className="nasa-tag"><span className="nasa-tag-dot" />{children}</span>
 }
 
-const CML_STAGES = [
-  { label: 'Cocktail Napkin', cml: 'CML 1' },
-  { label: 'Initial Feasibility', cml: 'CML 2' },
-  { label: 'Trade Space', cml: 'CML 3' },
-  { label: 'Point Design', cml: 'CML 4' },
-]
+const JOURNEY_STAGES = ['Planet', 'Ship size', 'Build ship', 'Fly', 'Stars']
 
 function getCmlStageIndex(step: GameStep) {
-  if (['mission', 'size', 'requirements'].includes(step)) return 0
-  if (['design', 'feasibility'].includes(step)) return 1
-  if (['alternative-a', 'alternative-b', 'trade-space'].includes(step)) return 2
-  return 3
+  if (step === 'mission') return 0
+  if (step === 'size') return 1
+  if (['requirements', 'design', 'negotiation', 'feasibility', 'alternative-a', 'alternative-b', 'trade-space'].includes(step)) return 2
+  if (['verify', 'launch', 'operations'].includes(step)) return 3
+  return 4
 }
 
 export function GameHeader({ step, mission, size, onHome }: { step: GameStep; mission?: MissionProfile; size?: SpacecraftSize; onHome: () => void }) {
@@ -28,21 +24,21 @@ export function GameHeader({ step, mission, size, onHome }: { step: GameStep; mi
     <header className="app-header">
       <a className="brand-lockup" href="#top" onClick={(event) => { event.preventDefault(); onHome() }} aria-label="Mission Control Academy home">
         <span className="brand-mark"><Orbit aria-hidden="true" /></span>
-        <span className="brand-words"><strong>MISSION CONTROL</strong><span>ACADEMY</span></span>
+        <span className="brand-words"><strong>SPACE ADVENTURE</strong><span>WITH NOVA</span></span>
       </a>
       <div className="header-center">
-        <span className="header-kicker">NASA SPACE APPS CHALLENGE</span>
-        <span className="header-game-name">Space Mission Design Game</span>
+        <span className="header-kicker">YOUR SPACE CREW</span>
+        <span className="header-game-name">A planet-saving game</span>
       </div>
       <div className="header-context">
         {mission ? <><span className="context-icon"><Satellite aria-hidden="true" /></span><span className="context-text"><strong>{mission.shortName}</strong><small>{size?.name ?? 'Mission design'}</small></span></> : <span className="header-freeplay"><span /> NO LOGIN · FREEPLAY</span>}
       </div>
-      {step !== 'welcome' && <div className="stepper" aria-label="NASA Concept Maturity Level progress">
-        {CML_STAGES.map((item, index) => {
+      {step !== 'welcome' && step !== 'sources' && <div className="stepper" aria-label="Adventure steps">
+        {JOURNEY_STAGES.map((label, index) => {
           const status = index < stepIndex ? 'done' : index === stepIndex ? 'current' : 'upcoming'
-          return <div className={`stepper-step stepper-${status}`} key={item.cml} aria-current={status === 'current' ? 'step' : undefined}>
-            <span className="stepper-dot">{status === 'done' ? <Check aria-hidden="true" /> : String(index + 1).padStart(2, '0')}</span>
-            <span className="stepper-label"><small>{item.cml}</small><strong>{item.label}</strong></span>
+          return <div className={`stepper-step stepper-${status}`} key={label} aria-current={status === 'current' ? 'step' : undefined}>
+            <span className="stepper-dot">{status === 'done' ? <Check aria-hidden="true" /> : String(index + 1)}</span>
+            <span className="stepper-label"><strong>{label}</strong></span>
           </div>
         })}
       </div>}
@@ -69,7 +65,7 @@ export function TelemetryStrip({ estimate, size, mission }: { estimate: MissionE
   ]
 
   return <section className="telemetry" aria-label="Live mission telemetry">
-    <div className="telemetry-heading"><span>LIVE TELEMETRY</span><span className="telemetry-live"><i /> UPDATING WITH YOUR DESIGN</span></div>
+    <div className="telemetry-heading">    <span>SHIP CHECK</span><span className="telemetry-live"><i /> CHANGES AS YOU BUILD</span></div>
     <div className="telemetry-grid">
       {metrics.map((metric) => <div className={`metric-card metric-${metric.status}`} key={metric.id} title={metric.detail}>
         <div className="metric-topline"><span>{metric.label}</span><span className="metric-pip" /></div>
@@ -108,7 +104,7 @@ export function PrimaryButton({ children, onClick, disabled, variant = 'primary'
 }
 
 export function DataNote() {
-  return <p className="data-note"><CircleHelp aria-hidden="true" /> Educational game values are simplified from real data. Actual spacecraft and launch performance vary by mission.</p>
+  return <p className="data-note"><CircleHelp aria-hidden="true" /> Our game uses simple numbers. Real space missions can be different.</p>
 }
 
 export function SegmentPill({ label, active = false, icon }: { label: string; active?: boolean; icon: 'launch' | 'space' | 'ground' | 'user' }) {

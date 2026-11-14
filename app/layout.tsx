@@ -7,13 +7,13 @@ export const metadata: Metadata = {
   description: 'Design a NASA-inspired space mission through four Concept Maturity Levels. Compare alternatives, balance science, cost, and risk, then verify and launch.',
   applicationName: 'Mission Control Academy',
   generator: 'v0.app',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: [
-      { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
-      { url: '/icon-dark-32x32.png', media: '(prefers-color-scheme: dark)' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/mission-control-icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/mission-control-icon.svg', type: 'image/svg+xml' },
     ],
-    apple: '/apple-icon.png',
+    apple: '/mission-control-apple-icon.png',
   },
 }
 
@@ -23,6 +23,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   userScalable: true,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
