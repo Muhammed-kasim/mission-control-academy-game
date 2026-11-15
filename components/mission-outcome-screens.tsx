@@ -54,7 +54,7 @@ export function MissionOutcomeScreen({ step, mission, size, difficulty, configur
   onLaunchGuide: (message: string) => void
   onOperationsGuide: (message: string) => void
 }) {
-  if (step === 'launch') return <MissionLaunchGame mission={mission} size={size} configuration={configuration} estimate={estimate} appearance={rocketAppearance} sandboxEnabled={sandboxEnabled} threeDEnabled={threeDEnabled && !smoothMode} launchChance={launchChance} learningBonus={learningBonus} onComplete={onLaunchComplete} onRevise={onReviseLaunch} onNovaMessage={onLaunchGuide} />
+  if (step === 'launch') return <MissionLaunchGame mission={mission} size={size} configuration={configuration} estimate={estimate} appearance={rocketAppearance} sandboxEnabled={sandboxEnabled} smoothMode={smoothMode} launchChance={launchChance} learningBonus={learningBonus} onComplete={onLaunchComplete} onRevise={onReviseLaunch} onNovaMessage={onLaunchGuide} />
   if (step === 'operations') return <MissionOperationsGame mission={mission} size={size} configuration={configuration} estimate={estimate} events={events} threeDEnabled={threeDEnabled && !smoothMode} onComplete={onOperationsComplete} onNovaMessage={onOperationsGuide} />
   if (step === 'data-lab' && operationsResult) return <MissionDataLab mission={mission} configuration={configuration} estimate={estimate} events={events} result={operationsResult} onComplete={onDataLabComplete} />
   if (step === 'launch-failure' && launchResult) return <MissionLaunchFailure configuration={configuration} estimate={estimate} result={launchResult} learningBonus={learningBonus} onRetry={onRetrySameDesign} onContinue={onFailureContinue} />

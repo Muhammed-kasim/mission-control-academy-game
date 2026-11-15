@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { getRocket, type MissionConfiguration, type RocketAppearance, type SpacecraftSize } from './mission-data'
 import type { MissionProgression, RocketPaintId } from './mission-progression'
 import { MissionSpacecraftDiagram } from './mission-spacecraft-diagram'
-import { MissionRocketSprite } from './mission-rocket-sprite'
+import { Rocket } from './Rocket'
 import { MissionCanvasErrorBoundary } from './mission-canvas-error-boundary'
 
 const SpacecraftCanvas = dynamic(() => import('./mission-3d-canvas').then((module) => module.SpacecraftCanvas), { ssr: false })
@@ -81,5 +81,6 @@ export function MissionRocketCustomizer({ configuration, appearance, onAppearanc
 }
 
 function RocketPreviewFallback({ rocketId, appearance }: { rocketId: string; appearance: RocketAppearance }) {
-  return <div className="rocket-preview-fallback"><MissionRocketSprite rocketId={rocketId} appearance={appearance} /><span>{getRocket(rocketId).name} · 2D preview</span></div>
+  const rocket = getRocket(rocketId)
+  return <div className="rocket-preview-fallback"><Rocket id={rocket.id} body={appearance.bodyColor} stripe={appearance.stripeColor} flame={false} height={190} /><span>{rocket.name} · 2D preview</span></div>
 }

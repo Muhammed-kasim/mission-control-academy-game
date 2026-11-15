@@ -1,18 +1,15 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent, type RefObject } from 'react'
-import dynamic from 'next/dynamic'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Flame, Gauge, Orbit, Rocket, ShieldAlert, Sparkles, Target } from 'lucide-react'
-import type { MissionConfiguration, MissionEstimate, MissionProfile, RocketAppearance, SpacecraftSize } from './mission-data'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Flame, Gauge, Orbit, Rocket as RocketIcon, ShieldAlert, Sparkles, Target } from 'lucide-react'
+import type { MissionConfiguration, MissionEstimate, MissionId, MissionProfile, RocketAppearance, SpacecraftSize } from './mission-data'
 import { getOrbit, getRocket } from './mission-data'
 import type { LaunchPhaseName, LaunchPhaseResult, LaunchResult } from './mission-simulation'
 import { PrimaryButton } from './mission-ui'
 import { useGameAudio } from './game-audio'
 import { CrewRadio, type RadioSpeaker } from './game-companions'
-import { MissionRocketSprite } from './mission-rocket-sprite'
-import { MissionCanvasErrorBoundary } from './mission-canvas-error-boundary'
-
-const MissionLaunchScene = dynamic(() => import('./mission-launch-scene').then((module) => module.MissionLaunchScene), { ssr: false, loading: () => null })
+import { Rocket } from './Rocket'
+import { useLaunchEngine, type LaunchEngineElements, type LaunchQuality, type LaunchEngineOptions } from './use-launch-engine'
 
 type LaunchPhase = 'ready' | 'risk-roll' | 'throttle' | 'turn' | 'separation' | 'result' | 'failure'
 type Grade = LaunchPhaseResult['grade']
@@ -23,9 +20,9 @@ const PHASE_LABELS: Record<LaunchPhaseName, string> = {
   separation: 'STAGE SEPARATION',
 }
 const PHASE_SECONDS: Record<'throttle' | 'turn' | 'separation', number> = {
-  throttle: 9,
-  turn: 9,
-  separation: 7,
+  throttle: 5,
+  turn: 6,
+  separation: 4,
 }
 const GRADE_POINTS: Record<Grade, number> = { Perfect: 100, Good: 68, Miss: 18 }
 
@@ -49,21 +46,21 @@ function getFlightBlockReason(mission: MissionProfile, configuration: MissionCon
   return reasons.length ? reasons.join(' ') : ''
 }
 
-export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size, configuration, estimate, appearance, sandboxEnabled, threeDEnabled, launchChance: suppliedLaunchChance, learningBonus, onComplete, onRevise, onNovaMessage }: {
+export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size, configuration, estimate, appearance, sandboxEnabled, smoothMode, launchChance: suppliedLaunchChance, learningBonus, onComplete, onRevise, onNovaMessage }: {
   mission: MissionProfile
   size: SpacecraftSize
   configuration: MissionConfiguration
   estimate: MissionEstimate
   appearance: RocketAppearance
   sandboxEnabled: boolean
-  threeDEnabled: boolean
+  smoothMode: boolean
   launchChance: number
   learningBonus: number
   onComplete: (result: LaunchResult) => void
   onRevise: () => void
   onNovaMessage: (message: string) => void
 }) {
-  const { play, prepare } = useGameAudio()
+  const { play, prepare, engine } = useGameAudio()
   const rocket = getRocket(configuration.rocketId)
   const orbit = getOrbit(configuration.orbitId)
   const blockReason = useMemo(() => sandboxEnabled ? '' : getFlightBlockReason(mission, configuration, estimate, size), [mission, configuration, estimate, size, sandboxEnabled])
@@ -73,7 +70,6 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
   const [phase, setPhase] = useState<LaunchPhase>(blockReason ? 'failure' : 'ready')
   const [phaseDone, setPhaseDone] = useState(Boolean(blockReason))
   const [lastResult, setLastResult] = useState<LaunchPhaseResult | null>(null)
-  const [rollNumber, setRollNumber] = useState<number | null>(null)
   const [combo, setCombo] = useState(0)
   const [outcome, setOutcome] = useState<LaunchResult | null>(blockReason ? {
     success: false,
@@ -91,8 +87,6 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
   const steerRef = useRef(0)
   const throttleRef = useRef(42)
   const headingRef = useRef(0)
-  const targetThrottleRef = useRef(58)
-  const targetHeadingRef = useRef(13)
   const separationAngleRef = useRef(0)
   const throttleNeedleRef = useRef<HTMLElement>(null)
   const throttleTargetRef = useRef<HTMLElement>(null)
@@ -104,8 +98,9 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
   const separationPointerRef = useRef<HTMLElement>(null)
   const timerTextRef = useRef<HTMLElement>(null)
   const separationTimerRef = useRef<HTMLElement>(null)
+  const radioMessageRef = useRef<HTMLSpanElement>(null)
+  const rollOutcomeRef = useRef<HTMLParagraphElement>(null)
   const holdControlRef = useRef<HTMLButtonElement>(null)
-  const spriteMotionRef = useRef<HTMLDivElement>(null)
   const riskTimerRef = useRef<number | null>(null)
   const phaseResultsRef = useRef<LaunchPhaseResult[]>([])
   const safeSamplesRef = useRef({ safe: 0, total: 0, stress: 0 })
@@ -113,12 +108,57 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
   const comboRef = useRef(0)
   const phaseRef = useRef(phase)
   const doneRef = useRef(phaseDone)
-  const launchMotionRef = useRef({ heading: 0 })
-  const rocketElapsedRef = useRef(0)
+  const [quality, setQuality] = useState<LaunchQuality>('auto')
+  const [qualityLoaded, setQualityLoaded] = useState(false)
+  const [showFps, setShowFps] = useState(false)
+  const [soundsReady, setSoundsReady] = useState(false)
 
   const targetStageAngle = 214
   const safeZoneLow = Math.max(0, 58 - safeHalfWidth)
   const actualLaunchChance = sandboxEnabled ? 99 : suppliedLaunchChance
+
+  useEffect(() => {
+    try {
+      const savedQuality = window.localStorage.getItem('mission-control-launch-quality-v1')
+      if (savedQuality === 'auto' || savedQuality === 'high' || savedQuality === 'low') setQuality(savedQuality)
+    } catch (error) {
+      console.warn('Could not load the saved launch quality.', error)
+    }
+    setQualityLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (!qualityLoaded) return
+    try {
+      window.localStorage.setItem('mission-control-launch-quality-v1', quality)
+    } catch (error) {
+      console.warn('Could not save the launch quality.', error)
+    }
+  }, [quality, qualityLoaded])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void prepare().then(() => {
+      if (active) setSoundsReady(true)
+    })
+    return () => { active = false }
+  }, [prepare])
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'f' || event.repeat) return
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      setShowFps((visible) => !visible)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const updatePhase = useCallback((nextPhase: LaunchPhase) => {
     phaseRef.current = nextPhase
@@ -151,107 +191,71 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
     registerPhaseResult('gravity-turn', averageError <= 7.5 ? 'Perfect' : averageError <= 18 ? 'Good' : 'Miss')
   }, [registerPhaseResult])
 
+  const resolveLaunchRoll = useCallback(() => {
+    const roll = Math.ceil(Math.random() * 100)
+    if (rollOutcomeRef.current) {
+      rollOutcomeRef.current.textContent = `Roll ${roll} ${roll <= actualLaunchChance ? '— we made it!' : '— launch trouble!'}`
+    }
+    riskTimerRef.current = window.setTimeout(() => {
+      if (phaseRef.current !== 'risk-roll') return
+      if (roll > actualLaunchChance) {
+        const failures = [
+          ['engine-shutdown', 'An engine stopped early. Real teams study engine tests and fuel flow.'],
+          ['bad-guidance', 'The rocket missed its path. Real teams practice guidance and steering.'],
+          ['fairing-issue', 'The payload cover had trouble. Real teams test covers before flight.'],
+        ] as const
+        const [failureType, failureReason] = failures[Math.floor(Math.random() * failures.length)]
+        setOutcome({ success: false, failureType, failureReason, chancePercent: actualLaunchChance, roll, learningBonus, phases: [], combo: 0, score: 0, orbitAccuracy: 0, fuelMargin: 0, lifetimeMultiplier: 0.5 })
+        updatePhase('failure')
+      } else {
+        setOutcome(null)
+        updatePhase('throttle')
+      }
+    }, 850)
+  }, [actualLaunchChance, learningBonus, updatePhase])
+
+  const onCountdownTick = useCallback((seconds: number) => {
+    if (seconds > 0) play('countdown')
+    if (seconds === 4) engine(true, 0.35)
+    if (seconds === 0 || seconds % 2 === 0) play('radio')
+    if (radioMessageRef.current) radioMessageRef.current.textContent = seconds === 0 ? 'LIFTOFF! Go, rocket, go!' : `T-minus ${seconds}. Go for launch!`
+  }, [engine, play])
+
+  const onEngineLevel = useCallback((level: number) => {
+    engine(true, 0.22 + level * 0.78)
+  }, [engine])
+
+  const onPhaseTimeout = useCallback((activePhase: 'throttle' | 'turn' | 'separation') => {
+    if (activePhase === 'throttle') finishThrottle()
+    else if (activePhase === 'turn') finishTurn()
+    else registerPhaseResult('separation', 'Miss')
+  }, [finishThrottle, finishTurn, registerPhaseResult])
+
+  const onMaxQ = useCallback(() => {
+    if (radioMessageRef.current) radioMessageRef.current.textContent = 'MAX-Q! Hold steady through the bumpy air.'
+    play('radio')
+    play('alert')
+  }, [play])
+
+  const engineControls = useMemo(() => ({
+    holding: holdingRef,
+    steer: steerRef,
+    throttle: throttleRef,
+    heading: headingRef,
+    targetStageAngle,
+    separationAngle: separationAngleRef,
+    safeSamples: safeSamplesRef,
+    turnSamples: turnSamplesRef,
+  }), [])
+
   useEffect(() => {
     if (phaseDone || (phase !== 'throttle' && phase !== 'turn' && phase !== 'separation')) return
     const duration = PHASE_SECONDS[phase]
-    let elapsed = 0
-    let previousFrame = 0
-    let lastUiSecond = -1
-    let lastGaugeTextAt = 0
-    let frameCount = 0
-    let fpsWindowStart = performance.now()
-    let frameInterval = 1000 / 60
-    let lastWork = 0
-    let raf = 0
-    safeSamplesRef.current = { safe: 0, total: 0, stress: 0 }
-    turnSamplesRef.current = { error: 0, total: 0 }
+    if (phase === 'throttle') safeSamplesRef.current = { safe: 0, total: 0, stress: 0 }
+    if (phase === 'turn') turnSamplesRef.current = { error: 0, total: 0 }
     if (timerTextRef.current) timerTextRef.current.textContent = String(duration)
     if (separationTimerRef.current) separationTimerRef.current.textContent = String(duration)
-    const updateFrame = (now: number) => {
-      if (document.hidden) {
-        previousFrame = 0
-        return
-      }
-      raf = window.requestAnimationFrame(updateFrame)
-      if (!previousFrame) previousFrame = now
-      const delta = Math.min(0.05, Math.max(0, (now - previousFrame) / 1000))
-      previousFrame = now
-      frameCount += 1
-      if (now - fpsWindowStart >= 1000) {
-        frameInterval = (frameCount / ((now - fpsWindowStart) / 1000)) < 24 ? 1000 / 30 : 1000 / 60
-        fpsWindowStart = now
-        frameCount = 0
-      }
-      if (now - lastWork < frameInterval) return
-      lastWork = now
-      elapsed += delta
-      const remaining = Math.max(0, Math.ceil(duration - elapsed))
-      if (remaining !== lastUiSecond) {
-        lastUiSecond = remaining
-        if (timerTextRef.current) timerTextRef.current.textContent = String(remaining)
-        if (separationTimerRef.current) separationTimerRef.current.textContent = String(remaining)
-      }
-      const updateGaugeText = now - lastGaugeTextAt >= 100
-      if (updateGaugeText) lastGaugeTextAt = now
-      rocketElapsedRef.current += delta
-      if (spriteMotionRef.current) {
-        const heading = launchMotionRef.current.heading
-        spriteMotionRef.current.style.transform = `translate3d(${heading * 1.3}px, -${Math.min(180, rocketElapsedRef.current * 18)}px, 0) rotate(${-heading * 0.55}deg)`
-        spriteMotionRef.current.style.opacity = String(Math.max(0.35, 1 - rocketElapsedRef.current / 90))
-      }
-      if (phase === 'throttle') {
-        const target = 57 + Math.sin(elapsed * 1.25) * 8 + Math.sin(elapsed * 2.1) * 2
-        targetThrottleRef.current = target
-        const nextThrottle = clamp(throttleRef.current + (holdingRef.current ? 2.1 * response : -0.45) * Math.max(0.5, delta * 30), 0, 100)
-        throttleRef.current = nextThrottle
-        if (throttleNeedleRef.current) throttleNeedleRef.current.style.transform = `translateX(calc(${nextThrottle}% - 50%))`
-        if (throttleTargetRef.current) throttleTargetRef.current.style.transform = `translateX(calc(${target}% - 50%))`
-        if (updateGaugeText) {
-          throttleGaugeRef.current?.setAttribute('aria-valuenow', String(Math.round(nextThrottle)))
-          if (throttleValueRef.current) throttleValueRef.current.textContent = `${Math.round(nextThrottle)}%`
-          if (targetThrottleValueRef.current) targetThrottleValueRef.current.textContent = `${Math.round(target)}`
-        }
-        safeSamplesRef.current.total += 1
-        const error = Math.abs(nextThrottle - target)
-        if (error <= safeHalfWidth) safeSamplesRef.current.safe += 1
-        if (nextThrottle > target + safeHalfWidth * 1.8) safeSamplesRef.current.stress += 1
-      } else if (phase === 'turn') {
-        const target = 12 + Math.sin(elapsed * 0.72) * 13 + Math.sin(elapsed * 1.42) * 3
-        targetHeadingRef.current = target
-        const nextHeading = clamp(headingRef.current + steerRef.current * response * 3.2 * Math.max(0.5, delta * 30), -45, 45)
-        headingRef.current = nextHeading
-        if (updateGaugeText) {
-          if (headingValueRef.current) headingValueRef.current.textContent = String(Math.round(nextHeading))
-          if (headingTargetValueRef.current) headingTargetValueRef.current.textContent = String(Math.round(target))
-        }
-        if (spriteMotionRef.current) spriteMotionRef.current.style.transform = `translate3d(${nextHeading * 1.3}px, -${elapsed * 5}px, 0) rotate(${-nextHeading * 0.55}deg)`
-        turnSamplesRef.current.total += 1
-        turnSamplesRef.current.error += Math.abs(nextHeading - target)
-      } else {
-        separationAngleRef.current = (elapsed * 168) % 360
-        if (separationPointerRef.current) separationPointerRef.current.style.transform = `rotate(${separationAngleRef.current}deg)`
-      }
-
-      if (elapsed >= duration) {
-        window.cancelAnimationFrame(raf)
-        if (phase === 'throttle') finishThrottle()
-        else if (phase === 'turn') finishTurn()
-        else {
-          registerPhaseResult('separation', 'Miss')
-        }
-      }
-    }
-    const resume = () => {
-      previousFrame = 0
-      if (!document.hidden) raf = window.requestAnimationFrame(updateFrame)
-    }
-    document.addEventListener('visibilitychange', resume)
-    raf = window.requestAnimationFrame(updateFrame)
-    return () => {
-      window.cancelAnimationFrame(raf)
-      document.removeEventListener('visibilitychange', resume)
-    }
-  }, [finishThrottle, finishTurn, phase, phaseDone, registerPhaseResult, response, safeHalfWidth])
+  }, [phase, phaseDone])
 
   useEffect(() => () => {
     if (riskTimerRef.current !== null) window.clearTimeout(riskTimerRef.current)
@@ -276,15 +280,16 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
   const updateHeading = useCallback((event: React.FormEvent<HTMLInputElement>) => {
     const value = Number(event.currentTarget.value)
     headingRef.current = value
-    launchMotionRef.current.heading = value
     if (headingValueRef.current) headingValueRef.current.textContent = String(Math.round(value))
   }, [])
 
   const attemptSeparation = useCallback(() => {
     if (phaseRef.current !== 'separation' || doneRef.current) return
     const distance = angleDistance(separationAngleRef.current, targetStageAngle)
+    if (!smoothMode && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'vibrate' in navigator) navigator.vibrate?.(35)
+    play('separation')
     registerPhaseResult('separation', distance <= 17 ? 'Perfect' : distance <= 48 ? 'Good' : 'Miss')
-  }, [registerPhaseResult])
+  }, [play, registerPhaseResult, smoothMode])
 
   const startLaunch = useCallback(async () => {
     if (blockReason) {
@@ -292,27 +297,8 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
       return
     }
     await prepare()
-    rocketElapsedRef.current = 0
-    setRollNumber(null)
     updatePhase('risk-roll')
-    riskTimerRef.current = window.setTimeout(() => {
-      const roll = Math.ceil(Math.random() * 100)
-      setRollNumber(roll)
-      if (roll > actualLaunchChance) {
-        const failures = [
-          ['engine-shutdown', 'An engine stopped early. Real teams study engine tests and fuel flow.'],
-          ['bad-guidance', 'The rocket missed its path. Real teams practice guidance and steering.'],
-          ['fairing-issue', 'The payload cover had trouble. Real teams test covers before flight.'],
-        ] as const
-        const [failureType, failureReason] = failures[Math.floor(Math.random() * failures.length)]
-        setOutcome({ success: false, failureType, failureReason, chancePercent: actualLaunchChance, roll, learningBonus, phases: [], combo: 0, score: 0, orbitAccuracy: 0, fuelMargin: 0, lifetimeMultiplier: 0.5 })
-        updatePhase('failure')
-      } else {
-        setOutcome(null)
-        updatePhase('throttle')
-      }
-    }, 1100)
-  }, [actualLaunchChance, blockReason, learningBonus, prepare, updatePhase])
+  }, [blockReason, prepare, updatePhase])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -352,7 +338,6 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
     if (phase === 'throttle') {
       updatePhase('turn')
       headingRef.current = 0
-      launchMotionRef.current.heading = 0
       if (headingValueRef.current) headingValueRef.current.textContent = '0'
     } else if (phase === 'turn') {
       updatePhase('separation')
@@ -373,12 +358,55 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
     }
   }, [combo, payloadRatio, phase, updatePhase])
 
+  const skipToResults = useCallback(() => {
+    if (phaseRef.current !== 'throttle' && phaseRef.current !== 'turn' && phaseRef.current !== 'separation') return
+    const results = [...phaseResultsRef.current]
+    const phases: LaunchPhaseName[] = ['throttle', 'gravity-turn', 'separation']
+    for (const name of phases) {
+      if (results.some((result) => result.phase === name)) continue
+      results.push({ phase: name, grade: 'Miss', combo: 0, points: GRADE_POINTS.Miss })
+    }
+    phaseResultsRef.current = results
+    comboRef.current = 0
+    setCombo(0)
+    const gradeValue = (grade: Grade) => grade === 'Perfect' ? 100 : grade === 'Good' ? 78 : 48
+    const turnGrade = results.find((result) => result.phase === 'gravity-turn')?.grade ?? 'Miss'
+    const separationGrade = results.find((result) => result.phase === 'separation')?.grade ?? 'Miss'
+    const throttleGrade = results.find((result) => result.phase === 'throttle')?.grade ?? 'Miss'
+    const orbitAccuracy = Math.round(gradeValue(turnGrade) * 0.76 + gradeValue(separationGrade) * 0.24)
+    const fuelMargin = clamp(Math.round(100 - payloadRatio * 34 + (throttleGrade === 'Perfect' ? 9 : throttleGrade === 'Miss' ? -17 : 0) + (separationGrade === 'Perfect' ? 6 : separationGrade === 'Miss' ? -11 : 0)), 4, 100)
+    const meanPoints = results.reduce((sum, item) => sum + item.points, 0) / results.length
+    const score = Math.round(clamp(meanPoints, 0, 100))
+    const lifetimeMultiplier = clamp((0.55 + orbitAccuracy / 220) * (0.82 + fuelMargin / 560), 0.5, 1.25)
+    doneRef.current = false
+    setPhaseDone(false)
+    setOutcome({ success: true, phases: results, combo: 0, score, orbitAccuracy, fuelMargin, lifetimeMultiplier })
+    updatePhase('result')
+  }, [payloadRatio, updatePhase])
+
+  const replay = useCallback(() => {
+    if (riskTimerRef.current !== null) window.clearTimeout(riskTimerRef.current)
+    riskTimerRef.current = null
+    phaseResultsRef.current = []
+    safeSamplesRef.current = { safe: 0, total: 0, stress: 0 }
+    turnSamplesRef.current = { error: 0, total: 0 }
+    comboRef.current = 0
+    doneRef.current = false
+    setPhaseDone(false)
+    setLastResult(null)
+    setOutcome(null)
+    setCombo(0)
+    throttleRef.current = 42
+    headingRef.current = 0
+    separationAngleRef.current = 0
+    updatePhase('ready')
+  }, [updatePhase])
+
   function submitFailure() {
     if (outcome) onComplete(outcome)
   }
 
   const gradeTone = lastResult?.grade.toLowerCase() ?? ''
-  const visiblePhase = phase === 'failure' || phase === 'result' || phase === 'separation' || phase === 'turn' ? phase : 'throttle'
   const radioMessage: { speaker: RadioSpeaker; message: string } = phase === 'failure'
     ? { speaker: 'Mission Control', message: outcome?.failureReason ?? blockReason ?? 'That rocket launch did not work. Let’s learn and try again!' }
     : phase === 'result'
@@ -386,13 +414,13 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
       : phase === 'ready'
         ? { speaker: 'Nova', message: `Our ${rocket.name} has a ${actualLaunchChance}% launch chance. Ready?` }
         : phase === 'risk-roll'
-          ? { speaker: 'Mission Control', message: 'Rolling the launch chance. Go, rocket, go!' }
+              ? { speaker: 'Mission Control', message: 'Rolling the launch chance. Go, rocket, go!' }
           : phase === 'throttle'
         ? phaseDone
           ? { speaker: 'Mission Control', message: lastResult?.grade === 'Perfect' ? 'Perfect! The rocket stayed safe and strong!' : 'Good flying! Keep going with your mission!' }
-          : payloadRatio > 0.75
+              : payloadRatio > 0.75
             ? { speaker: 'Robot Pilot', message: 'We’re carrying a lot. Hold on tight!' }
-            : { speaker: 'Mission Control', message: 'T-minus 3! Keep THRUST in the green!' }
+            : { speaker: 'Mission Control', message: 'Keep THRUST in the green as we climb!' }
         : phase === 'turn'
           ? phaseDone
             ? { speaker: 'Robot Pilot', message: lastResult?.grade === 'Perfect' ? 'Perfect turn! We’re on the right path!' : 'Nice steering! Our ship is still on its way!' }
@@ -419,43 +447,70 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
   }, [guideMessage, onNovaMessage])
 
   useEffect(() => {
-    if (phase === 'throttle') play('engine')
-    else if (phase === 'risk-roll') play('countdown')
-    else if (phase === 'turn' || phase === 'separation') play('countdown')
-    else if (phase === 'failure') play('alert')
-    else if (phase === 'result' && outcome?.success) play('success')
-  }, [outcome?.success, phase, play])
+    if (phase === 'throttle') engine(true, 0.72)
+    else if (phase === 'turn' || phase === 'separation') engine(true, 0.62)
+    else engine(false)
+    if (phase === 'failure') play('alert')
+    if (phase === 'result' && outcome?.success) play('success')
+    return () => engine(false)
+  }, [engine, outcome?.success, phase, play])
 
   useEffect(() => {
     if (lastResult) play(lastResult.grade === 'Perfect' ? 'success' : 'alert')
   }, [lastResult, play])
 
+  const phaseSeconds = phase === 'throttle' ? PHASE_SECONDS.throttle
+    : phase === 'turn' ? PHASE_SECONDS.turn : PHASE_SECONDS.separation
+
   return <main className={`playable-launch ${phase === 'failure' ? 'playable-launch-failure' : ''}`}>
-    {phase === 'result' && outcome?.success && <ConfettiBurst />}
-    <LaunchRocketVisual phase={phase} visiblePhase={visiblePhase} rocketId={rocket.id} appearance={appearance} threeDEnabled={threeDEnabled} controlsRef={launchMotionRef} spriteMotionRef={spriteMotionRef} />
+    <LaunchScene2D
+      phase={phase}
+      phaseDone={phaseDone}
+      phaseSeconds={phaseSeconds}
+      payloadRatio={payloadRatio}
+      response={response}
+      safeHalfWidth={safeHalfWidth}
+      quality={quality}
+      smoothMode={smoothMode}
+      rocketId={rocket.id}
+      missionId={mission.id}
+      instrumentIds={configuration.instrumentIds}
+      appearance={appearance}
+      controls={engineControls}
+      showFps={showFps}
+      onCountdownComplete={resolveLaunchRoll}
+      onCountdownTick={onCountdownTick}
+      onEngineLevel={onEngineLevel}
+      onPhaseTimeout={onPhaseTimeout}
+      onMaxQ={onMaxQ}
+    />
     <header className="launch-game-top">
-      <span className="launch-game-brand"><Rocket aria-hidden="true" /> FLIGHT CONTROL / {mission.shortName.toUpperCase()}</span>
+      <span className="launch-game-brand"><RocketIcon aria-hidden="true" /> FLIGHT CONTROL / {mission.shortName.toUpperCase()}</span>
       <span className="launch-game-vehicle">{rocket.name} <i /> {orbit.name}</span>
+      <label className="launch-quality-control"><span>QUALITY</span><select disabled={phase !== 'ready'} value={quality} onChange={(event) => {
+        const selected = event.currentTarget.value
+        if (selected === 'auto' || selected === 'high' || selected === 'low') setQuality(selected)
+      }} aria-label="Launch quality"><option value="auto">Auto</option><option value="high">High</option><option value="low">Low</option></select></label>
     </header>
-    <CrewRadio speaker={radioMessage.speaker} message={radioMessage.message} />
+    <CrewRadio speaker={radioMessage.speaker} message={radioMessage.message} messageRef={radioMessageRef} />
     {phase === 'failure' ? <section className="launch-failure-card" role="alert">
       <span className="launch-alert-icon"><ShieldAlert aria-hidden="true" /></span>
       <small>LAUNCH RESULT · ROLL {outcome?.roll ?? '—'}</small>
       <h1>{outcome?.failureType === 'design-limit' ? 'This rocket cannot carry our ship.' : 'Our rocket did not reach orbit.'}</h1>
       <p>{outcome?.failureReason ?? blockReason}</p>
-      <div className="launch-failure-actions"><PrimaryButton variant="quiet" onClick={onRevise}>Fix our ship</PrimaryButton><PrimaryButton onClick={submitFailure}>Learn from this launch</PrimaryButton></div>
+      <div className="launch-failure-actions"><PrimaryButton variant="quiet" onClick={replay}>Replay</PrimaryButton><PrimaryButton variant="quiet" onClick={onRevise}>Fix our ship</PrimaryButton><PrimaryButton onClick={submitFailure}>Learn from this launch</PrimaryButton></div>
     </section> : phase === 'result' ? <section className="launch-result-card" role="status">
       <span className="launch-result-stamp"><Check aria-hidden="true" /> ORBIT INSERTION COMPLETE</span>
       <h1>Flight performance</h1>
       <div className="launch-result-grid"><div><Target aria-hidden="true" /><strong>{outcome?.orbitAccuracy}%</strong><small>ORBIT ACCURACY</small></div><div><Flame aria-hidden="true" /><strong>{outcome?.fuelMargin}%</strong><small>FUEL MARGIN</small></div><div><Sparkles aria-hidden="true" /><strong>{outcome?.score}/100</strong><small>FLIGHT SKILL</small></div></div>
       <p>{outcome?.phases.map((result) => `${PHASE_LABELS[result.phase]}: ${result.grade}`).join(' · ')}{` · ${combo}× combo`}</p>
-      <PrimaryButton onClick={() => outcome && onComplete(outcome)}>Continue to mission debrief</PrimaryButton>
+      <div className="launch-result-actions"><PrimaryButton variant="quiet" onClick={replay}>Replay</PrimaryButton><PrimaryButton onClick={() => outcome && onComplete(outcome)}>Continue to mission debrief</PrimaryButton></div>
     </section> : phase === 'ready' || phase === 'risk-roll' ? <section className={`launch-ready-card ${phase === 'risk-roll' ? 'launch-risk-rolling' : ''}`}>
       <span className="eyebrow">READY FOR FLIGHT</span><h1>{phase === 'risk-roll' ? 'Launch chance roll!' : 'Ready!'}</h1>
       <div className="launch-dice" aria-live="polite">{phase === 'risk-roll' ? '🎲' : `${actualLaunchChance}%`}</div>
-      <p>{phase === 'risk-roll' ? rollNumber === null ? 'The dice are rolling…' : `Roll ${rollNumber} ${rollNumber <= actualLaunchChance ? '— we made it!' : '— launch trouble!'}` : `Nova: ${rocket.name} is ready. This rocket has a ${actualLaunchChance}% chance.`}</p>
+      <p ref={rollOutcomeRef}>{phase === 'risk-roll' ? 'The dice are rolling…' : `Nova: ${rocket.name} is ready. This rocket has a ${actualLaunchChance}% chance.`}</p>
       {learningBonus > 0 && <small className="learning-bonus-note">Learning bonus +{learningBonus}%</small>}
-      {phase === 'ready' && <PrimaryButton onClick={startLaunch}>Begin countdown</PrimaryButton>}
+      {phase === 'ready' && <PrimaryButton disabled={!soundsReady} onClick={startLaunch}>{soundsReady ? 'Begin countdown' : 'Getting sounds ready…'}</PrimaryButton>}
     </section> : <LaunchFlightHUD
       phase={phase}
       phaseDone={phaseDone}
@@ -479,6 +534,7 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
       headingValueRef={headingValueRef}
       headingTargetValueRef={headingTargetValueRef}
       separationPointerRef={separationPointerRef}
+      onSkipToResults={skipToResults}
       onHoldStart={startHolding}
       onRelease={releaseControls}
       onSteerStart={startSteering}
@@ -488,35 +544,144 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
     />}
   </main>
 })
-
 type LiveLaunchPhase = 'throttle' | 'turn' | 'separation'
 
-const LaunchRocketVisual = memo(function LaunchRocketVisual({ phase, visiblePhase, rocketId, appearance, threeDEnabled, controlsRef, spriteMotionRef }: {
+const LaunchScene2D = memo(function LaunchScene2D({
+  phase, phaseDone, phaseSeconds, payloadRatio, response, safeHalfWidth, quality, smoothMode, rocketId, missionId, instrumentIds,
+  appearance, controls, showFps, onCountdownComplete, onCountdownTick, onEngineLevel, onPhaseTimeout, onMaxQ,
+}: {
   phase: LaunchPhase
-  visiblePhase: Extract<LaunchPhase, 'throttle' | 'turn' | 'separation' | 'result' | 'failure'>
+  phaseDone: boolean
+  phaseSeconds: number
+  payloadRatio: number
+  response: number
+  safeHalfWidth: number
+  quality: LaunchQuality
+  smoothMode: boolean
   rocketId: string
+  missionId: MissionId
+  instrumentIds: string[]
   appearance: RocketAppearance
-  threeDEnabled: boolean
-  controlsRef: RefObject<{ heading: number }>
-  spriteMotionRef: RefObject<HTMLDivElement | null>
+  controls: LaunchEngineOptions['controls']
+  showFps: boolean
+  onCountdownComplete: () => void
+  onCountdownTick: (seconds: number) => void
+  onEngineLevel: (level: number) => void
+  onPhaseTimeout: LaunchEngineOptions['onPhaseTimeout']
+  onMaxQ: () => void
 }) {
-  return <>
-    <div className={`launch-scene-fallback ${phase === 'failure' ? 'launch-scene-exploded' : ''}`} aria-hidden="true">
-      <div className="launch-sprite-motion" ref={spriteMotionRef}>
-        <MissionRocketSprite rocketId={rocketId} appearance={appearance} exploded={phase === 'failure'} shadow={false} />
-      </div>
+  const sceneRef = useRef<HTMLDivElement>(null)
+  const rocketRef = useRef<HTMLDivElement>(null)
+  const rocketNoseRef = useRef<SVGPathElement>(null)
+  const rocketStageBodyRef = useRef<SVGRectElement>(null)
+  const rocketFinsRef = useRef<SVGPathElement>(null)
+  const flameRef = useRef<HTMLDivElement>(null)
+  const flameCoreRef = useRef<HTMLDivElement>(null)
+  const padRef = useRef<HTMLDivElement>(null)
+  const towerRef = useRef<HTMLDivElement>(null)
+  const groundRef = useRef<HTMLDivElement>(null)
+  const cloudsRef = useRef<HTMLDivElement>(null)
+  const highCloudsRef = useRef<HTMLDivElement>(null)
+  const skyDarknessRef = useRef<HTMLDivElement>(null)
+  const maxQBannerRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const leftBoosterRef = useRef<HTMLDivElement>(null)
+  const rightBoosterRef = useRef<HTMLDivElement>(null)
+  const leftFairingRef = useRef<HTMLDivElement>(null)
+  const rightFairingRef = useRef<HTMLDivElement>(null)
+  const spacecraftRef = useRef<HTMLDivElement>(null)
+  const leftSolarRef = useRef<HTMLDivElement>(null)
+  const rightSolarRef = useRef<HTMLDivElement>(null)
+  const antennaRef = useRef<HTMLDivElement>(null)
+  const planetRef = useRef<HTMLDivElement>(null)
+  const orbitBannerRef = useRef<HTMLDivElement>(null)
+  const flashRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const countdownRef = useRef<HTMLElement>(null)
+  const altitudeRef = useRef<HTMLElement>(null)
+  const speedRef = useRef<HTMLElement>(null)
+  const flightTimeRef = useRef<HTMLElement>(null)
+  const timerRef = useRef<HTMLElement>(null)
+  const separationTimerRef = useRef<HTMLElement>(null)
+  const throttleNeedleRef = useRef<HTMLElement>(null)
+  const throttleTargetRef = useRef<HTMLElement>(null)
+  const throttleValueRef = useRef<HTMLElement>(null)
+  const targetThrottleValueRef = useRef<HTMLElement>(null)
+  const throttleGaugeRef = useRef<HTMLDivElement>(null)
+  const headingValueRef = useRef<HTMLElement>(null)
+  const headingTargetValueRef = useRef<HTMLElement>(null)
+  const separationPointerRef = useRef<HTMLElement>(null)
+  const fpsOverlayRef = useRef<HTMLPreElement>(null)
+  const qualityReadoutRef = useRef<HTMLElement>(null)
+  const elements = useMemo<LaunchEngineElements>(() => ({
+    scene: sceneRef, rocket: rocketRef, rocketNose: rocketNoseRef, rocketStageBody: rocketStageBodyRef,
+    rocketFins: rocketFinsRef, flame: flameRef, flameCore: flameCoreRef, pad: padRef, tower: towerRef,
+    ground: groundRef, clouds: cloudsRef, highClouds: highCloudsRef, skyDarkness: skyDarknessRef,
+    maxQBanner: maxQBannerRef, stage: stageRef, leftBooster: leftBoosterRef, rightBooster: rightBoosterRef,
+    leftFairing: leftFairingRef, rightFairing: rightFairingRef, spacecraft: spacecraftRef, leftSolar: leftSolarRef,
+    rightSolar: rightSolarRef, antenna: antennaRef, planet: planetRef, orbitBanner: orbitBannerRef, flash: flashRef,
+    canvas: canvasRef, countdown: countdownRef, altitude: altitudeRef, speed: speedRef, flightTime: flightTimeRef,
+    timer: timerRef, separationTimer: separationTimerRef, throttleNeedle: throttleNeedleRef,
+    throttleTarget: throttleTargetRef, throttleValue: throttleValueRef, targetThrottleValue: targetThrottleValueRef,
+    throttleGauge: throttleGaugeRef, headingValue: headingValueRef, headingTargetValue: headingTargetValueRef,
+    separationPointer: separationPointerRef, fpsOverlay: fpsOverlayRef, qualityReadout: qualityReadoutRef,
+  }), [])
+
+  useLaunchEngine({
+    phase,
+    phaseDone,
+    phaseSeconds,
+    payloadRatio,
+    response,
+    safeHalfWidth,
+    quality,
+    smoothMode,
+    rocketId,
+    missionId,
+    elements,
+    controls,
+    onCountdownComplete,
+    onCountdownTick,
+    onEngineLevel,
+    onPhaseTimeout,
+    onMaxQ,
+  })
+
+  return <div ref={sceneRef} className={`launch-world launch-world-${missionId}`} aria-hidden="true">
+    <div className="launch-sky" />
+    <div ref={skyDarknessRef} className="launch-sky-darkness" />
+    <div ref={highCloudsRef} className="launch-high-clouds" />
+    <div ref={cloudsRef} className="launch-clouds" />
+    <div ref={groundRef} className="launch-ground-layer" />
+    <div ref={padRef} className="launch-pad"><i /><b /><span /></div>
+    <div ref={towerRef} className="launch-tower"><i /><i /><i /><b /></div>
+    <div className="launch-countdown-display">T−<span ref={countdownRef}>10</span></div>
+    <div className="launch-flight-data"><span><small>ALTITUDE</small><b ref={altitudeRef}>0 km</b></span><span><small>SPEED</small><b ref={speedRef}>0 km/h</b></span><span><small>TIME</small><b ref={flightTimeRef}>T+00s</b></span></div>
+    <div ref={rocketRef} className="launch-rocket-wrapper" style={{ width: 96, height: 240 }}>
+      <Rocket id={getRocket(rocketId).id} body={appearance.bodyColor} stripe={appearance.stripeColor} flame={false} height={240} showBoosters={false} noseRef={rocketNoseRef} stageRef={rocketStageBodyRef} finsRef={rocketFinsRef} />
+      <div ref={flameRef} className="launch-rocket-flame"><i /><i /></div>
+      <div ref={flameCoreRef} className="launch-rocket-flame-core" />
     </div>
-    {threeDEnabled && phase !== 'ready' && phase !== 'risk-roll' && <MissionCanvasErrorBoundary resetKey={`${rocketId}:${JSON.stringify(appearance)}`} fallback={null}>
-      <MissionLaunchScene
-        phase={visiblePhase}
-        appearance={appearance}
-        rocketId={rocketId}
-        exploded={phase === 'failure'}
-        enabled
-        controlsRef={controlsRef}
-      />
-    </MissionCanvasErrorBoundary>}
-  </>
+    <div ref={leftBoosterRef} className={`launch-detached-booster ${rocketId === 'sls' ? '' : 'launch-decorative-hidden'}`} />
+    <div ref={rightBoosterRef} className={`launch-detached-booster launch-detached-booster-right ${rocketId === 'sls' ? '' : 'launch-decorative-hidden'}`} />
+    <div ref={stageRef} className="launch-detached-stage" />
+    <div ref={leftFairingRef} className="launch-fairing launch-fairing-left" />
+    <div ref={rightFairingRef} className="launch-fairing launch-fairing-right" />
+    <div ref={spacecraftRef} className="launch-spacecraft">
+      <span ref={leftSolarRef} className="launch-solar-panel launch-solar-left" />
+      <span ref={rightSolarRef} className="launch-solar-panel launch-solar-right" />
+      <b />
+      {instrumentIds.map((instrumentId, index) => <span className="launch-spacecraft-sensor" style={{ left: `${15 + index * 5}px` }} key={instrumentId} />)}
+      <i ref={antennaRef} />
+    </div>
+    <div ref={planetRef} className="launch-orbit-planet" />
+    <canvas ref={canvasRef} className="launch-particle-canvas" />
+    <div ref={maxQBannerRef} className="launch-maxq-banner">MAX-Q! <small>HOLD STEADY</small></div>
+    <div ref={orbitBannerRef} className="launch-orbit-banner">ORBIT ACHIEVED</div>
+    <div ref={flashRef} className="launch-screen-flash" />
+    <pre ref={fpsOverlayRef} className="launch-fps-overlay" style={{ display: showFps ? 'block' : 'none' }}>FPS --</pre>
+    <span ref={qualityReadoutRef} className="launch-quality-readout" />
+  </div>
 })
 
 const LaunchFlightHUD = memo(function LaunchFlightHUD({
@@ -542,6 +707,7 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
   headingValueRef,
   headingTargetValueRef,
   separationPointerRef,
+  onSkipToResults,
   onHoldStart,
   onRelease,
   onSteerStart,
@@ -571,6 +737,7 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
   headingValueRef: RefObject<HTMLElement | null>
   headingTargetValueRef: RefObject<HTMLElement | null>
   separationPointerRef: RefObject<HTMLElement | null>
+  onSkipToResults: () => void
   onHoldStart: (event: PointerEvent<HTMLButtonElement>) => void
   onRelease: () => void
   onSteerStart: (direction: number) => void
@@ -608,9 +775,10 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
       {phase === 'separation' && <div className="launch-separation-panel">
         <div className="launch-separation-ring" style={{ '--target-angle': `${targetStageAngle}deg` } as CSSProperties}><i className="launch-ring-target" /><i className="launch-ring-pointer" ref={separationPointerRef} /><span><b>T−<span ref={separationTimerRef}>{PHASE_SECONDS.separation}</span></b><small>SEPARATE AT THE MARK</small></span></div>
         <p>Tap when the moving indicator reaches the glowing target. Release the spent stage cleanly.</p>
-        <button type="button" className="launch-separate-control" onClick={onSeparate} disabled={phaseDone}>SEPARATE STAGE <Rocket aria-hidden="true" /></button>
+        <button type="button" className="launch-separate-control" onClick={onSeparate} disabled={phaseDone}>SEPARATE STAGE <RocketIcon aria-hidden="true" /></button>
         {phaseDone && <div className={`launch-phase-feedback feedback-${gradeTone}`} role="status"><strong>{lastResult?.grade ?? 'Miss'}</strong><span>{lastResult?.grade === 'Perfect' ? 'Clean separation; fuel and orbit insertion are on target.' : lastResult?.grade === 'Good' ? 'Stage released with a small fuel penalty.' : 'Late or early separation reduced insertion margin.'}</span><button type="button" onClick={onNextPhase}>Flight debrief <ArrowRight aria-hidden="true" /></button></div>}
       </div>}
+      <button className="launch-skip-button" type="button" onClick={onSkipToResults}>Skip to results</button>
     </section>
     <section className="launch-instrument-panel" aria-live="polite">
       <span className="launch-instrument-title"><CircleAlert aria-hidden="true" /> FLIGHT DIRECTOR CALLOUT</span>
@@ -620,9 +788,3 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
     {lastResult && <div className={`launch-score-pop launch-score-${gradeTone}`} key={`${lastResult.phase}-${lastResult.grade}`} aria-live="polite"><strong>{lastResult.grade.toUpperCase()}</strong><span>+{lastResult.points} FLIGHT PTS</span></div>}
   </div>
 })
-
-function ConfettiBurst() {
-  return <div className="confetti-burst" aria-hidden="true">
-    {Array.from({ length: 28 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 7) * 0.08}s`, backgroundColor: `hsl(${(index * 43) % 360} 75% 65%)` }} />)}
-  </div>
-}

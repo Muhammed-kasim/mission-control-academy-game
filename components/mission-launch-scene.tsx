@@ -4,9 +4,9 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Vector3, type Group, type Mesh } from 'three'
-import type { RocketAppearance } from './mission-data'
+import { getRocket, type RocketAppearance } from './mission-data'
 import { MissionCanvasPerformance } from './mission-canvas-performance'
-import { MissionRocketSprite } from './mission-rocket-sprite'
+import { Rocket } from './Rocket'
 import { MissionCanvasErrorBoundary } from './mission-canvas-error-boundary'
 
 export const MissionLaunchScene = memo(function MissionLaunchScene({ phase, appearance, rocketId, exploded, enabled, controlsRef }: {
@@ -40,7 +40,7 @@ export const MissionLaunchScene = memo(function MissionLaunchScene({ phase, appe
 
   return <div className="launch-scene-3d" aria-hidden="true">
     <MissionCanvasErrorBoundary resetKey={`${rocketId}:${JSON.stringify(appearance)}`} fallback={null}>
-      <Canvas dpr={[1, 1.5]} frameloop="demand" camera={{ position: [0, 2, 13], fov: 40 }} gl={{ antialias: true, alpha: false }} fallback={<MissionRocketSprite rocketId={rocketId} appearance={appearance} exploded={exploded} shadow={false} />}>
+      <Canvas dpr={[1, 1.5]} frameloop="demand" camera={{ position: [0, 2, 13], fov: 40 }} gl={{ antialias: true, alpha: false }} fallback={<Rocket id={getRocket(rocketId).id} body={appearance.bodyColor} stripe={appearance.stripeColor} flame={!exploded} height={240} />}>
         <MissionCanvasPerformance />
         <color attach="background" args={['#070d17']} />
         <ambientLight intensity={1.4} />

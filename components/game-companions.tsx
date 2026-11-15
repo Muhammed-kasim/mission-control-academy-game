@@ -1,7 +1,7 @@
 'use client'
 
 import { Bot, Radio, Rocket } from 'lucide-react'
-import { memo, useEffect } from 'react'
+import { memo, useEffect, type RefObject } from 'react'
 import { useGameAudio } from './game-audio'
 
 export type RadioSpeaker = 'Mission Control' | 'Robot Pilot' | 'Nova'
@@ -21,7 +21,7 @@ export function NovaGuide({ message }: { message: string }) {
   </aside>
 }
 
-export const CrewRadio = memo(function CrewRadio({ speaker, message }: { speaker: RadioSpeaker; message: string }) {
+export const CrewRadio = memo(function CrewRadio({ speaker, message, messageRef }: { speaker: RadioSpeaker; message: string; messageRef?: RefObject<HTMLSpanElement | null> }) {
   const { play } = useGameAudio()
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export const CrewRadio = memo(function CrewRadio({ speaker, message }: { speaker
     </span>
     <span className="crew-radio-bubble" key={`${speaker}-${message}`}>
       <b>{speaker}</b>
-      <span>{message}</span>
+      <span ref={messageRef}>{message}</span>
     </span>
   </aside>
 })

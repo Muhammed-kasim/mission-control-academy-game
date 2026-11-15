@@ -9,7 +9,7 @@ import { getAntennaOptions, getBatteryOptions, getInstrument, getShieldingOption
 import { MissionCanvasPerformance } from './mission-canvas-performance'
 import { MissionSpacecraftDiagram } from './mission-spacecraft-diagram'
 import { MissionCanvasErrorBoundary } from './mission-canvas-error-boundary'
-import { MissionRocketSprite } from './mission-rocket-sprite'
+import { Rocket } from './Rocket'
 
 const INSTRUMENT_COLORS = ['#e6bd77', '#90b5fa', '#f28f83', '#82dfca']
 
@@ -111,7 +111,7 @@ const SpacecraftModel = memo(function SpacecraftModel({ configuration, size, aut
 
 const RocketPreviewFallback = memo(function RocketPreviewFallback({ rocketId, appearance }: { rocketId: string; appearance: RocketAppearance }) {
   const rocket = getRocket(rocketId)
-  return <div className="rocket-preview-fallback"><MissionRocketSprite rocketId={rocketId} appearance={appearance} /><span>{rocket.name} · 2D fallback preview</span></div>
+  return <div className="rocket-preview-fallback"><Rocket id={rocket.id} body={appearance.bodyColor} stripe={appearance.stripeColor} flame={false} height={190} /><span>{rocket.name} · 2D fallback preview</span></div>
 })
 
 const RocketModel = memo(function RocketModel({ rocketId, appearance, autoRotate }: { rocketId: string; appearance: RocketAppearance; autoRotate: boolean }) {
