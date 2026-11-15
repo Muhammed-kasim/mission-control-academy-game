@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useSyncExternalStore } from 'react'
 import { getRocket, type MissionConfiguration, type RocketAppearance, type SpacecraftSize } from './mission-data'
 import type { MissionProgression, RocketPaintId } from './mission-progression'
 import { MissionSpacecraftDiagram } from './mission-spacecraft-diagram'
@@ -11,22 +11,36 @@ import { MissionCanvasErrorBoundary } from './mission-canvas-error-boundary'
 const SpacecraftCanvas = dynamic(() => import('./mission-3d-canvas').then((module) => module.SpacecraftCanvas), { ssr: false })
 const RocketCanvas = dynamic(() => import('./mission-3d-canvas').then((module) => module.RocketCanvas), { ssr: false })
 
+const webGLListeners = new Set<() => void>()
+let webGLAvailableSnapshot: boolean | null = null
+
+function getWebGLSnapshot() {
+  return webGLAvailableSnapshot
+}
+
+function subscribeToWebGLAvailability(listener: () => void) {
+  webGLListeners.add(listener)
+  return () => { webGLListeners.delete(listener) }
+}
+
 function useWebGLAvailable(enabled: boolean) {
-  const [available, setAvailable] = useState<boolean | null>(null)
+  const available = useSyncExternalStore(subscribeToWebGLAvailability, getWebGLSnapshot, () => null)
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || webGLAvailableSnapshot !== null) return
     try {
       const canvas = document.createElement('canvas')
       const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
       context?.getExtension('WEBGL_lose_context')?.loseContext()
-      setAvailable(Boolean(context))
-    } catch {
-      setAvailable(false)
+      webGLAvailableSnapshot = Boolean(context)
+    } catch (error) {
+      console.warn('Could not check WebGL availability.', error)
+      webGLAvailableSnapshot = false
     }
+    for (const listener of webGLListeners) listener()
   }, [enabled])
 
-  return available
+  return enabled ? available : null
 }
 
 export function MissionSpacecraft3D({ configuration, size, threeDEnabled, onThreeDChange }: { configuration: MissionConfiguration; size: SpacecraftSize; threeDEnabled: boolean; onThreeDChange: (enabled: boolean) => void }) {

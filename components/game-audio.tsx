@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { Volume2, VolumeX } from 'lucide-react'
 
 type GameSound = 'countdown' | 'engine' | 'alert' | 'success' | 'radio' | 'separation'
@@ -21,10 +21,52 @@ const SOUND_NOTES: Record<GameSound, { frequency: number; duration: number; wave
   separation: [{ frequency: 96, duration: 0.12, waveform: 'sawtooth' }, { frequency: 58, duration: 0.2, waveform: 'sine' }],
 }
 const SOUND_TYPES: GameSound[] = ['countdown', 'engine', 'alert', 'success', 'radio', 'separation']
+const MUTE_STORAGE_KEY = 'mission-control-academy-muted-v1'
+const mutedListeners = new Set<() => void>()
+let mutedPreferenceSnapshot: boolean | null = null
+
+function getMutedSnapshot() {
+  if (mutedPreferenceSnapshot !== null) return mutedPreferenceSnapshot
+  try {
+    mutedPreferenceSnapshot = window.localStorage.getItem(MUTE_STORAGE_KEY) !== 'false'
+  } catch (error) {
+    console.warn('Could not load the saved audio preference.', error)
+    mutedPreferenceSnapshot = true
+  }
+  return mutedPreferenceSnapshot
+}
+
+function notifyMutedListeners() {
+  for (const listener of mutedListeners) listener()
+}
+
+function handleMutedStorage(event: StorageEvent) {
+  if (event.key !== MUTE_STORAGE_KEY && event.key !== null) return
+  mutedPreferenceSnapshot = null
+  notifyMutedListeners()
+}
+
+function subscribeToMutedPreference(listener: () => void) {
+  mutedListeners.add(listener)
+  window.addEventListener('storage', handleMutedStorage)
+  return () => {
+    mutedListeners.delete(listener)
+    window.removeEventListener('storage', handleMutedStorage)
+  }
+}
+
+function saveMutedPreference(muted: boolean) {
+  mutedPreferenceSnapshot = muted
+  try {
+    window.localStorage.setItem(MUTE_STORAGE_KEY, String(muted))
+  } catch (error) {
+    console.warn('Could not save the audio preference.', error)
+  }
+  notifyMutedListeners()
+}
 
 export function GameAudioProvider({ children }: { children: ReactNode }) {
-  const [muted, setMuted] = useState(true)
-  const [preferenceLoaded, setPreferenceLoaded] = useState(false)
+  const muted = useSyncExternalStore(subscribeToMutedPreference, getMutedSnapshot, () => true)
   const audioContext = useRef<AudioContext | null>(null)
   const soundBuffers = useRef<Partial<Record<GameSound, AudioBuffer>>>({})
   const engineSource = useRef<AudioBufferSourceNode | null>(null)
@@ -35,24 +77,6 @@ export function GameAudioProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     mutedRef.current = muted
   }, [muted])
-
-  useEffect(() => {
-    try {
-      setMuted(window.localStorage.getItem('mission-control-academy-muted-v1') !== 'false')
-    } catch (error) {
-      console.warn('Could not load the saved audio preference.', error)
-    }
-    setPreferenceLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (!preferenceLoaded) return
-    try {
-      window.localStorage.setItem('mission-control-academy-muted-v1', String(muted))
-    } catch (error) {
-      console.warn('Could not save the audio preference.', error)
-    }
-  }, [muted, preferenceLoaded])
 
   const prepare = useCallback(async () => {
     if (typeof window === 'undefined' || !window.AudioContext) return
@@ -204,7 +228,7 @@ export function GameAudioProvider({ children }: { children: ReactNode }) {
 
   return <GameAudioContext.Provider value={{ play, prepare, engine }}>
     {children}
-    <button className="game-audio-toggle" type="button" aria-label={muted ? 'Unmute game sounds' : 'Mute game sounds'} aria-pressed={!muted} onClick={() => setMuted((current) => !current)}>
+    <button className="game-audio-toggle" type="button" aria-label={muted ? 'Unmute game sounds' : 'Mute game sounds'} aria-pressed={!muted} onClick={() => saveMutedPreference(!muted)}>
       {muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}<span>{muted ? 'SOUND OFF' : 'SOUND ON'}</span>
     </button>
   </GameAudioContext.Provider>
