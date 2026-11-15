@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FeasibilityScreen, TradeSpaceScreen } from './mission-cml-flow'
 import { MissionDesign, type DesignPhase } from './mission-design'
 import { MissionNegotiationScreen } from './mission-negotiation'
@@ -16,6 +16,7 @@ import { fetchRecentSolarFlare } from './nasa-data'
 import { calculateLaunchChance, simulateMissionEvents, type LaunchResult, type MissionOperationsResult, type SimulatedMissionEvent } from './mission-simulation'
 import { getRolesForPlayer, type PlayMode, type TeamRoleId } from './team-mode'
 import { NovaGuide } from './game-companions'
+import { MultiplayerPresence, MultiplayerRoomPanel, useMultiplayerRoom, type SharedGameState } from './multiplayer-room'
 
 const NOVA_PROMPTS: Record<GameStep, string> = {
   welcome: "Hi! I'm Nova. Pick a planet for our adventure.",
@@ -30,7 +31,7 @@ const NOVA_PROMPTS: Record<GameStep, string> = {
   'alternative-b': 'Change one part to make a new ship idea.',
   'trade-space': 'Pick the ship you like best.',
   verify: 'Ready? Tap Launch when your ship is set.',
-  launch: 'Hold THRUST to keep the meter green!',
+  launch: 'Use the arrow keys to steer, adjust thrust, and separate stages. Autopilot is optional.',
   operations: 'Switch off tools, then start a space day.',
   'data-lab': 'Look at our discoveries, then answer Nova’s question.',
   'launch-failure': 'Every launch teaches us something. Try again!',
@@ -47,7 +48,9 @@ function configurationKey(configuration: MissionConfiguration) {
 
 export function MissionControlGame() {
   const { play, prepare } = useGameAudio()
-  const [step, setStep] = useState<GameStep>('welcome')
+  const multiplayer = useMultiplayerRoom()
+  const appliedRoomRevision = useRef<number | null>(null)
+  const [step, setLocalStep] = useState<GameStep>('welcome')
   const [sourceReturnStep, setSourceReturnStep] = useState<GameStep>('welcome')
   const [progression, setProgression] = useState<MissionProgression>(DEFAULT_MISSION_PROGRESSION)
   const [sandboxEnabled, setSandboxEnabled] = useState(false)
@@ -92,12 +95,49 @@ export function MissionControlGame() {
   const estimateB = useMemo(() => calculateMission(mission, size, alternativeB ?? configuration, difficulty), [mission, size, alternativeB, configuration, difficulty])
   const launchChance = calculateLaunchChance(getRocket(configuration.rocketId).id, estimate.payloadMassKg, getRocket(configuration.rocketId).payloadKg, learningBonus)
   const hasMissionDesign = ['design', 'alternative-a', 'alternative-b'].includes(step)
+  const activePlayMode: PlayMode = multiplayer.room ? 'team' : playMode
+  const activePlayerCount = multiplayer.room ? Math.max(2, multiplayer.room.players.length) : playerCount
   const updateLaunchGuide = useCallback((message: string) => {
     setGameGuide((current) => ({ ...current, launch: message }))
   }, [])
   const updateOperationsGuide = useCallback((message: string) => {
     setGameGuide((current) => ({ ...current, operations: message }))
   }, [])
+
+  function syncRoomGame(overrides: Partial<SharedGameState> = {}) {
+    void multiplayer.updateGame({
+      missionId,
+      sizeId,
+      difficulty,
+      step,
+      configuration,
+      rocketAppearance,
+      alternativeA,
+      alternativeB,
+      ...overrides,
+    })
+  }
+
+  function changeStep(nextStep: GameStep, overrides: Partial<SharedGameState> = {}) {
+    setLocalStep(nextStep)
+    syncRoomGame({ ...overrides, step: nextStep })
+  }
+
+  useEffect(() => {
+    const shared = multiplayer.room
+    if (!shared || shared.updatedBy === shared.currentPlayerId || appliedRoomRevision.current === shared.revision) return
+    appliedRoomRevision.current = shared.revision
+    startTransition(() => {
+      setMissionId(shared.missionId)
+      setSizeId(shared.sizeId)
+      setDifficulty(shared.difficulty)
+      setLocalStep(shared.step)
+      setConfiguration(copyConfiguration(shared.configuration))
+      setRocketAppearance(shared.rocketAppearance)
+      setAlternativeA(shared.alternativeA ? copyConfiguration(shared.alternativeA) : null)
+      setAlternativeB(shared.alternativeB ? copyConfiguration(shared.alternativeB) : null)
+    })
+  }, [multiplayer.room])
 
   useEffect(() => {
     setProgression(readMissionProgression())
@@ -157,57 +197,71 @@ export function MissionControlGame() {
 
   function startMission() {
     setActivePlayer(1)
-    setActiveRole(getRolesForPlayer(1, playerCount)[0] ?? 'designer')
-    setStep('mission')
+    setActiveRole(getRolesForPlayer(1, activePlayerCount)[0] ?? 'designer')
+    changeStep('mission')
   }
 
   function chooseMission(nextMission: typeof mission) {
+    const nextConfiguration = getDefaultConfiguration(nextMission, size)
+    const nextAppearance = { ...rocketAppearance, missionPatch: nextMission.id }
     setMissionId(nextMission.id)
-    setRocketAppearance((current) => ({ ...current, missionPatch: nextMission.id }))
+    setConfiguration(nextConfiguration)
+    setRocketAppearance(nextAppearance)
     setLearningBonus(0)
     setLaunchResult(null)
     setOperationsResult(null)
     resetAlternatives()
-    setStep('size')
+    changeStep('size', { missionId: nextMission.id, configuration: nextConfiguration, rocketAppearance: nextAppearance, alternativeA: null, alternativeB: null })
   }
 
   function chooseSize(nextSize: typeof size) {
+    const nextConfiguration = getDefaultConfiguration(mission, nextSize)
     setSizeId(nextSize.id)
-    setConfiguration(getDefaultConfiguration(mission, nextSize))
+    setConfiguration(nextConfiguration)
     resetAlternatives()
-    setStep('design')
+    changeStep('design', { sizeId: nextSize.id, configuration: nextConfiguration, alternativeA: null, alternativeB: null })
   }
 
   function returnHome() {
-    setStep('welcome')
+    changeStep('welcome')
   }
 
   function openSources() {
     setSourceReturnStep(step)
-    setStep('sources')
+    changeStep('sources')
   }
 
   function updateConfiguration(next: Partial<MissionConfiguration>) {
-    if (step === 'alternative-a') setAlternativeA((current) => ({ ...(current ?? configuration), ...next }))
-    else if (step === 'alternative-b') setAlternativeB((current) => ({ ...(current ?? configuration), ...next }))
-    else {
-      setConfiguration((current) => ({ ...current, ...next }))
+    if (step === 'alternative-a') {
+      const updated = { ...(alternativeA ?? configuration), ...next }
+      setAlternativeA(updated)
+      syncRoomGame({ alternativeA: updated })
+    } else if (step === 'alternative-b') {
+      const updated = { ...(alternativeB ?? configuration), ...next }
+      setAlternativeB(updated)
+      syncRoomGame({ alternativeB: updated })
+    } else {
+      const updated = { ...configuration, ...next }
+      setConfiguration(updated)
       if (step === 'design') {
         setAlternativeA(null)
         setAlternativeB(null)
         setCoordinationEarned(false)
+        syncRoomGame({ configuration: updated, alternativeA: null, alternativeB: null })
       }
     }
     setAlternativeNotice(false)
   }
 
   function beginAlternatives() {
-    setAlternativeA((current) => current ?? copyConfiguration(configuration))
-    setAlternativeB((current) => current ?? copyConfiguration(configuration))
+    const nextAlternativeA = alternativeA ?? copyConfiguration(configuration)
+    const nextAlternativeB = alternativeB ?? copyConfiguration(configuration)
+    setAlternativeA(nextAlternativeA)
+    setAlternativeB(nextAlternativeB)
     setShowSkipWarning(false)
     setSkippedComparison(false)
     setAlternativeNotice(false)
-    setStep('alternative-a')
+    changeStep('alternative-a', { alternativeA: nextAlternativeA, alternativeB: nextAlternativeB })
   }
 
   function saveAlternativeB() {
@@ -216,23 +270,24 @@ export function MissionControlGame() {
       return
     }
     setAlternativeNotice(false)
-    setStep('trade-space')
+    changeStep('trade-space')
   }
 
   function selectPointDesign(which: 'A' | 'B') {
     const selected = which === 'A' ? alternativeA : alternativeB
     if (!selected) return
-    setConfiguration(copyConfiguration(selected))
+    const nextConfiguration = copyConfiguration(selected)
+    setConfiguration(nextConfiguration)
     setPointDesign(`Alternative ${which}`)
     setSkippedComparison(false)
-    setStep('verify')
+    changeStep('verify', { configuration: nextConfiguration })
   }
 
   function skipComparison() {
     setShowSkipWarning(false)
     setSkippedComparison(true)
     setPointDesign('Initial design')
-    setStep('verify')
+    changeStep('verify')
   }
 
   function beginFlight() {
@@ -241,48 +296,50 @@ export function MissionControlGame() {
     setFlightId(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
     setLaunchResult(null)
     setOperationsResult(null)
-    setStep('launch')
+    changeStep('launch')
   }
 
   function prepareAnotherFlight() {
     setLaunchResult(null)
     setOperationsResult(null)
     setLearningBonus(0)
-    setStep('verify')
+    changeStep('verify')
   }
 
   function retrySameDesign() {
     setLearningBonus((current) => Math.min(20, current + 5))
     setLaunchResult(null)
-    setStep('verify')
+    changeStep('verify')
   }
 
   function restartMission() {
-    setConfiguration(getDefaultConfiguration(mission, size))
-    setRocketAppearance({ ...DEFAULT_ROCKET_APPEARANCE, missionPatch: mission.id })
+    const nextConfiguration = getDefaultConfiguration(mission, size)
+    const nextAppearance = { ...DEFAULT_ROCKET_APPEARANCE, missionPatch: mission.id }
+    setConfiguration(nextConfiguration)
+    setRocketAppearance(nextAppearance)
     setLearningBonus(0)
     setLaunchResult(null)
     setOperationsResult(null)
     resetAlternatives()
-    setStep('mission')
+    changeStep('mission', { configuration: nextConfiguration, rocketAppearance: nextAppearance, alternativeA: null, alternativeB: null })
   }
 
   function completeOperations(events: SimulatedMissionEvent[], result: MissionOperationsResult) {
     setFlightEvents(events)
     setOperationsResult(result)
-    setStep('data-lab')
+    changeStep('data-lab')
     play('success')
   }
 
   function completeDataLab(result: MissionOperationsResult) {
     setOperationsResult(result)
-    setStep('report')
+    changeStep('report')
   }
 
   const activePhase: DesignPhase = step === 'alternative-a' || step === 'alternative-b' ? step : 'baseline'
   function changeActivePlayer(player: number) {
     setActivePlayer(player)
-    setActiveRole(getRolesForPlayer(player, playerCount)[0] ?? 'designer')
+    setActiveRole(getRolesForPlayer(player, activePlayerCount)[0] ?? 'designer')
   }
   function changePlayerCount(count: number) {
     setPlayerCount(count)
@@ -290,15 +347,19 @@ export function MissionControlGame() {
     setActiveRole(getRolesForPlayer(1, count)[0] ?? 'designer')
   }
 
+  const sharedGame: SharedGameState = { missionId, sizeId, difficulty, step, configuration, rocketAppearance, alternativeA, alternativeB }
+  const multiplayerPanel = <MultiplayerRoomPanel initialGame={sharedGame} />
+
   return <div className={`academy-shell ${highContrast ? 'high-contrast' : ''}`} id="top">
     <GameHeader step={step} mission={step === 'welcome' ? undefined : mission} size={step === 'welcome' || step === 'mission' ? undefined : size} onHome={returnHome} />
-    {hasMissionDesign && <MissionDesignAdvisor mission={mission} size={size} configuration={activeConfiguration} estimate={estimate} checks={checks} sandboxEnabled={sandboxEnabled} playMode={playMode} playerCount={playerCount} activePlayer={activePlayer} activeRole={activeRole} onPlayerChange={changeActivePlayer} onRoleChange={setActiveRole} onChange={updateConfiguration} />}
+    {hasMissionDesign && <MissionDesignAdvisor mission={mission} size={size} configuration={activeConfiguration} estimate={estimate} checks={checks} sandboxEnabled={sandboxEnabled} playMode={activePlayMode} playerCount={activePlayerCount} activePlayer={activePlayer} activeRole={activeRole} onPlayerChange={changeActivePlayer} onRoleChange={setActiveRole} onChange={updateConfiguration} />}
     {hasMissionDesign && sandboxEnabled && <div className="sandbox-banner" role="status">FREE BUILD · No limits!</div>}
-    {step === 'welcome' && <WelcomeScreen onPlay={startMission} onSources={openSources} difficulty={difficulty} onDifficultyChange={setDifficulty} playMode={playMode} playerCount={playerCount} onPlayModeChange={setPlayMode} onPlayerCountChange={changePlayerCount} sandboxEnabled={sandboxEnabled} onSandboxChange={setSandboxEnabled} highContrast={highContrast} onHighContrastChange={setHighContrast} threeDEnabled={threeDEnabled} onThreeDChange={setThreeDEnabled} />}
-    {step === 'sources' && <MissionSources onBack={() => setStep(sourceReturnStep)} />}
+    <MultiplayerPresence />
+    {step === 'welcome' && <WelcomeScreen onPlay={startMission} onSources={openSources} difficulty={difficulty} onDifficultyChange={(nextDifficulty) => { setDifficulty(nextDifficulty); syncRoomGame({ difficulty: nextDifficulty }) }} playMode={multiplayer.room ? 'team' : playMode} playerCount={multiplayer.room ? Math.max(2, multiplayer.room.players.length) : playerCount} onPlayModeChange={(mode) => { if (!multiplayer.room) setPlayMode(mode) }} onPlayerCountChange={(count) => { if (!multiplayer.room) changePlayerCount(count) }} sandboxEnabled={sandboxEnabled} onSandboxChange={setSandboxEnabled} highContrast={highContrast} onHighContrastChange={setHighContrast} threeDEnabled={threeDEnabled} onThreeDChange={setThreeDEnabled} multiplayerPanel={multiplayerPanel} />}
+    {step === 'sources' && <MissionSources onBack={() => changeStep(sourceReturnStep)} />}
     {step === 'mission' && <MissionSelectionScreen selectedId={missionId} onSelect={chooseMission} onBack={returnHome} />}
-    {step === 'size' && <SizeSelectionScreen selectedId={sizeId} onSelect={chooseSize} onBack={() => setStep('mission')} />}
-    {step === 'requirements' && <RequirementsScreen mission={mission} size={size} difficulty={difficulty} onContinue={() => setStep('design')} onBack={() => setStep('size')} />}
+    {step === 'size' && <SizeSelectionScreen selectedId={sizeId} onSelect={chooseSize} onBack={() => changeStep('mission')} />}
+    {step === 'requirements' && <RequirementsScreen mission={mission} size={size} difficulty={difficulty} onContinue={() => changeStep('design')} onBack={() => changeStep('size')} />}
     {hasMissionDesign && <MissionDesign
       mission={mission}
       size={size}
@@ -306,8 +367,8 @@ export function MissionControlGame() {
       estimate={estimate}
       checks={checks}
       phase={activePhase}
-      playMode={playMode}
-      playerCount={playerCount}
+      playMode={activePlayMode}
+      playerCount={activePlayerCount}
       activePlayer={activePlayer}
       activeRole={activeRole}
       rocketAppearance={rocketAppearance}
@@ -320,16 +381,16 @@ export function MissionControlGame() {
       }}
       onPlayerChange={changeActivePlayer}
       onRoleChange={setActiveRole}
-      onRocketAppearanceChange={(patch) => setRocketAppearance((current) => ({ ...current, ...patch }))}
+      onRocketAppearanceChange={(patch) => { const nextAppearance = { ...rocketAppearance, ...patch }; setRocketAppearance(nextAppearance); syncRoomGame({ rocketAppearance: nextAppearance }) }}
       notice={step === 'alternative-b' && alternativeNotice ? 'Alternative B must differ from Alternative A so the trade-space comparison reveals a real design choice.' : undefined}
       onChange={updateConfiguration}
-      onBack={() => setStep(step === 'design' ? 'size' : step === 'alternative-a' ? 'feasibility' : 'alternative-a')}
-      onVerify={() => setStep(step === 'design' ? 'negotiation' : step === 'alternative-a' ? 'alternative-b' : 'trade-space')}
+      onBack={() => changeStep(step === 'design' ? 'size' : step === 'alternative-a' ? 'feasibility' : 'alternative-a')}
+      onVerify={() => changeStep(step === 'design' ? 'negotiation' : step === 'alternative-a' ? 'alternative-b' : 'trade-space')}
     />}
-    {step === 'negotiation' && <MissionNegotiationScreen configuration={configuration} estimate={estimate} size={size} mode={playMode} playerCount={playerCount} activePlayer={activePlayer} activeRole={activeRole} onPlayerChange={changeActivePlayer} onRoleChange={setActiveRole} onApplyFix={(patch) => setConfiguration((current) => ({ ...current, ...patch }))} onContinue={(earned) => { setCoordinationEarned(earned); setStep('feasibility') }} onBack={() => setStep('design')} />}
-    {step === 'feasibility' && <FeasibilityScreen mission={mission} size={size} difficulty={difficulty} estimate={estimate} checks={checks} showSkipWarning={showSkipWarning} onBack={() => { setShowSkipWarning(false); setStep('design') }} onContinue={beginAlternatives} onSkip={() => setShowSkipWarning(true)} onCancelSkip={() => setShowSkipWarning(false)} onSkipAnyway={skipComparison} />}
-    {step === 'trade-space' && alternativeA && alternativeB && <TradeSpaceScreen mission={mission} size={size} alternativeA={alternativeA} alternativeB={alternativeB} estimateA={estimateA} estimateB={estimateB} onBack={() => setStep('alternative-b')} onChoose={selectPointDesign} />}
-    {(['verify', 'launch', 'operations', 'data-lab', 'launch-failure', 'report'] as GameStep[]).includes(step) && <MissionOutcomeScreen step={step} mission={mission} size={size} difficulty={difficulty} configuration={configuration} estimate={estimate} checks={checks} pointDesign={pointDesign} alternativeA={alternativeA} alternativeB={alternativeB} events={flightEvents} runId={flightId} exploredTradeSpace={Boolean(alternativeA && alternativeB && !skippedComparison)} teamMode={playMode === 'team'} coordinationEarned={coordinationEarned} launchResult={launchResult ?? undefined} operationsResult={operationsResult ?? undefined} rocketAppearance={rocketAppearance} progression={progression} onProgressionChange={setProgression} sandboxEnabled={sandboxEnabled} threeDEnabled={threeDEnabled} smoothMode={smoothMode} onSmoothModeChange={setSmoothMode} launchChance={launchChance} learningBonus={learningBonus} flightReady={flightReady} backLabel={skippedComparison ? 'Back to feasibility review' : 'Back to trade-space comparison'} onBackToDesign={() => setStep(skippedComparison ? 'feasibility' : 'trade-space')} onLaunch={beginFlight} onLaunchComplete={(result) => { setLaunchResult(result); setStep(result.success ? 'operations' : 'launch-failure') }} onOperationsComplete={completeOperations} onDataLabComplete={completeDataLab} onRetrySameDesign={retrySameDesign} onFailureContinue={() => setStep('report')} onReviseLaunch={() => setStep('design')} onTryAgain={prepareAnotherFlight} onRestart={restartMission} onLaunchGuide={updateLaunchGuide} onOperationsGuide={updateOperationsGuide} />}
+    {step === 'negotiation' && <MissionNegotiationScreen configuration={configuration} estimate={estimate} size={size} mode={activePlayMode} playerCount={activePlayerCount} activePlayer={activePlayer} activeRole={activeRole} onPlayerChange={changeActivePlayer} onRoleChange={setActiveRole} onApplyFix={(patch) => { const nextConfiguration = { ...configuration, ...patch }; setConfiguration(nextConfiguration); syncRoomGame({ configuration: nextConfiguration }) }} onContinue={(earned) => { setCoordinationEarned(earned); changeStep('feasibility') }} onBack={() => changeStep('design')} />}
+    {step === 'feasibility' && <FeasibilityScreen mission={mission} size={size} difficulty={difficulty} estimate={estimate} checks={checks} showSkipWarning={showSkipWarning} onBack={() => { setShowSkipWarning(false); changeStep('design') }} onContinue={beginAlternatives} onSkip={() => setShowSkipWarning(true)} onCancelSkip={() => setShowSkipWarning(false)} onSkipAnyway={skipComparison} />}
+    {step === 'trade-space' && alternativeA && alternativeB && <TradeSpaceScreen mission={mission} size={size} alternativeA={alternativeA} alternativeB={alternativeB} estimateA={estimateA} estimateB={estimateB} onBack={() => changeStep('alternative-b')} onChoose={selectPointDesign} />}
+    {(['verify', 'launch', 'operations', 'data-lab', 'launch-failure', 'report'] as GameStep[]).includes(step) && <MissionOutcomeScreen step={step} mission={mission} size={size} difficulty={difficulty} configuration={configuration} estimate={estimate} checks={checks} pointDesign={pointDesign} alternativeA={alternativeA} alternativeB={alternativeB} events={flightEvents} runId={flightId} exploredTradeSpace={Boolean(alternativeA && alternativeB && !skippedComparison)} teamMode={activePlayMode === 'team'} coordinationEarned={coordinationEarned} launchResult={launchResult ?? undefined} operationsResult={operationsResult ?? undefined} rocketAppearance={rocketAppearance} progression={progression} onProgressionChange={setProgression} sandboxEnabled={sandboxEnabled} threeDEnabled={threeDEnabled} smoothMode={smoothMode} onSmoothModeChange={setSmoothMode} launchChance={launchChance} learningBonus={learningBonus} flightReady={flightReady} backLabel={skippedComparison ? 'Back to feasibility review' : 'Back to trade-space comparison'} onBackToDesign={() => changeStep(skippedComparison ? 'feasibility' : 'trade-space')} onLaunch={beginFlight} onLaunchComplete={(result) => { setLaunchResult(result); changeStep(result.success ? 'operations' : 'launch-failure') }} onOperationsComplete={completeOperations} onDataLabComplete={completeDataLab} onRetrySameDesign={retrySameDesign} onFailureContinue={() => changeStep('report')} onReviseLaunch={() => changeStep('design')} onTryAgain={prepareAnotherFlight} onRestart={restartMission} onLaunchGuide={updateLaunchGuide} onOperationsGuide={updateOperationsGuide} sharedControls={multiplayer.room ? { heading: multiplayer.room.launchHeading, throttle: multiplayer.room.launchThrottle, autopilot: multiplayer.room.launchAutopilot } : undefined} sharedControlsBy={multiplayer.room?.launchUpdatedBy} playerId={multiplayer.playerId} onControlsChange={multiplayer.updateLaunch} />}
     <NovaGuide message={step === 'launch' ? gameGuide.launch || NOVA_PROMPTS.launch : step === 'operations' ? gameGuide.operations || NOVA_PROMPTS.operations : NOVA_PROMPTS[step]} />
     {step !== 'welcome' && <footer className="app-footer"><span>MISSION CONTROL ACADEMY <i /> EDUCATIONAL SIMULATION</span><span>Values simplified from real data · Actual missions use detailed engineering models</span></footer>}
   </div>

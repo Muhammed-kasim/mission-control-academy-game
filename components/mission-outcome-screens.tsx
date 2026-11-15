@@ -11,8 +11,10 @@ import { MissionOperationsGame } from './mission-operations-game'
 import { MissionDataLab } from './mission-data-lab'
 import { MissionLaunchFailure } from './mission-launch-failure'
 import { DataNote, NasaTag, PageHeading, PrimaryButton, WarningBanner } from './mission-ui'
+import { MissionNasaGallery } from './mission-nasa-gallery'
+import type { SharedControls } from './mission-launch-game'
 
-export function MissionOutcomeScreen({ step, mission, size, difficulty, configuration, estimate, checks, pointDesign, alternativeA, alternativeB, events, runId, exploredTradeSpace, teamMode, coordinationEarned, launchResult, operationsResult, rocketAppearance, progression, onProgressionChange, sandboxEnabled, threeDEnabled, smoothMode, onSmoothModeChange, launchChance, learningBonus, flightReady, backLabel, onBackToDesign, onLaunch, onLaunchComplete, onOperationsComplete, onDataLabComplete, onRetrySameDesign, onFailureContinue, onReviseLaunch, onTryAgain, onRestart, onLaunchGuide, onOperationsGuide }: {
+export function MissionOutcomeScreen({ step, mission, size, difficulty, configuration, estimate, checks, pointDesign, alternativeA, alternativeB, events, runId, exploredTradeSpace, teamMode, coordinationEarned, launchResult, operationsResult, rocketAppearance, progression, onProgressionChange, sandboxEnabled, threeDEnabled, smoothMode, onSmoothModeChange, launchChance, learningBonus, flightReady, backLabel, onBackToDesign, onLaunch, onLaunchComplete, onOperationsComplete, onDataLabComplete, onRetrySameDesign, onFailureContinue, onReviseLaunch, onTryAgain, onRestart, onLaunchGuide, onOperationsGuide, sharedControls, sharedControlsBy, playerId, onControlsChange }: {
   step: GameStep
   mission: MissionProfile
   size: SpacecraftSize
@@ -53,9 +55,13 @@ export function MissionOutcomeScreen({ step, mission, size, difficulty, configur
   onRestart: () => void
   onLaunchGuide: (message: string) => void
   onOperationsGuide: (message: string) => void
+  sharedControls?: SharedControls
+  sharedControlsBy?: string | null
+  playerId?: string | null
+  onControlsChange?: (controls: SharedControls) => void
 }) {
-  if (step === 'launch') return <MissionLaunchGame mission={mission} size={size} configuration={configuration} estimate={estimate} appearance={rocketAppearance} sandboxEnabled={sandboxEnabled} smoothMode={smoothMode} launchChance={launchChance} learningBonus={learningBonus} onComplete={onLaunchComplete} onRevise={onReviseLaunch} onNovaMessage={onLaunchGuide} />
-  if (step === 'operations') return <MissionOperationsGame mission={mission} size={size} configuration={configuration} estimate={estimate} events={events} threeDEnabled={threeDEnabled && !smoothMode} onComplete={onOperationsComplete} onNovaMessage={onOperationsGuide} />
+  if (step === 'launch') return <MissionLaunchGame mission={mission} size={size} configuration={configuration} estimate={estimate} appearance={rocketAppearance} sandboxEnabled={sandboxEnabled} smoothMode={smoothMode} launchChance={launchChance} learningBonus={learningBonus} sharedControls={sharedControls} sharedControlsBy={sharedControlsBy} playerId={playerId} onControlsChange={onControlsChange} onComplete={onLaunchComplete} onRevise={onReviseLaunch} onNovaMessage={onLaunchGuide} />
+  if (step === 'operations') return <><MissionNasaGallery missionId={mission.id} /><MissionOperationsGame mission={mission} size={size} configuration={configuration} estimate={estimate} events={events} threeDEnabled={threeDEnabled && !smoothMode} onComplete={onOperationsComplete} onNovaMessage={onOperationsGuide} /></>
   if (step === 'data-lab' && operationsResult) return <MissionDataLab mission={mission} configuration={configuration} estimate={estimate} events={events} result={operationsResult} onComplete={onDataLabComplete} />
   if (step === 'launch-failure' && launchResult) return <MissionLaunchFailure configuration={configuration} estimate={estimate} result={launchResult} learningBonus={learningBonus} onRetry={onRetrySameDesign} onContinue={onFailureContinue} />
   if (step === 'report') return <MissionReport mission={mission} size={size} difficulty={difficulty} configuration={configuration} estimate={estimate} checks={checks} pointDesign={pointDesign} alternativeA={alternativeA} alternativeB={alternativeB} events={events} runId={runId} exploredTradeSpace={exploredTradeSpace} teamMode={teamMode} coordinationEarned={coordinationEarned} launchResult={launchResult} operationsResult={operationsResult} progression={progression} onProgressionChange={onProgressionChange} onTryAgain={onTryAgain} onRestart={onRestart} />

@@ -148,3 +148,108 @@ export async function fetchNasaResearchGallery(world: 'moon' | 'mars' | 'earth')
 
   return results.slice(0, 6)
 }
+
+const LAUNCH_GALLERY_CACHE_TTL = 24 * 60 * 60 * 1000
+const LAUNCH_GALLERY_CACHE_PREFIX = 'mission-control-nasa-launch-gallery-v1'
+const LAUNCH_FALLBACKS: Record<'moon' | 'mars', NasaGalleryCard[]> = {
+  moon: [
+    { title: 'Lunar surface viewed by the Lunar Reconnaissance Orbiter', imageUrl: '/fallback/moon/moon-01.jpg', credit: 'NASA / LRO', caption: 'Lunar terrain observed by NASA’s Lunar Reconnaissance Orbiter.', mission: 'Lunar Reconnaissance Orbiter', link: 'https://images.nasa.gov/details/PIA14011' },
+    { title: 'Sinuous chain of depressions on the Moon', imageUrl: '/fallback/moon/moon-02.jpg', credit: 'NASA / LRO', caption: 'A close view of lunar surface features from the LRO Camera.', mission: 'Lunar Reconnaissance Orbiter', link: 'https://images.nasa.gov/details/PIA14010' },
+    { title: 'First images from the Lunar Reconnaissance Orbiter', imageUrl: '/fallback/moon/moon-03.jpg', credit: 'NASA / LRO', caption: 'One of the first lunar views returned by LROC.', mission: 'Lunar Reconnaissance Orbiter', link: 'https://images.nasa.gov/details/PIA12884' },
+  ],
+  mars: [
+    { title: 'Martian dust storm, November 18, 2012', imageUrl: '/fallback/mars/mars-01.jpg', credit: 'NASA / JPL-Caltech / MSSS', caption: 'A dust storm viewed from orbit around Mars.', mission: 'Mars Reconnaissance Orbiter', link: 'https://images.nasa.gov/details/PIA16450' },
+    { title: 'Martian dust storm', imageUrl: '/fallback/mars/mars-02.jpg', credit: 'NASA / JPL-Caltech / MSSS', caption: 'Clouds of dust sweep over the red planet.', mission: 'Mars Reconnaissance Orbiter', link: 'https://images.nasa.gov/details/PIA15959' },
+    { title: 'Dust storm covers Opportunity', imageUrl: '/fallback/mars/mars-03.jpg', credit: 'NASA / JPL-Caltech', caption: 'A global dust storm seen from orbit as it enveloped Mars.', mission: 'Mars Reconnaissance Orbiter', link: 'https://images.nasa.gov/details/PIA22329' },
+  ],
+}
+
+function isLaunchGalleryCard(value: unknown): value is NasaGalleryCard {
+  if (typeof value !== 'object' || value === null) return false
+  const card = value as Partial<NasaGalleryCard>
+  if (typeof card.title !== 'string' || typeof card.imageUrl !== 'string' || typeof card.link !== 'string') return false
+  if (typeof card.caption !== 'string' || typeof card.credit !== 'string' || typeof card.mission !== 'string') return false
+  if (card.imageUrl.startsWith('/fallback/')) return true
+  try {
+    return new URL(card.imageUrl).hostname === 'images-assets.nasa.gov' && new URL(card.link).hostname === 'images.nasa.gov'
+  } catch {
+    return false
+  }
+}
+
+function readLaunchGalleryCache(world: 'moon' | 'mars') {
+  try {
+    const raw = window.localStorage.getItem(`${LAUNCH_GALLERY_CACHE_PREFIX}:${world}`)
+    if (!raw) return null
+    const cached: unknown = JSON.parse(raw)
+    if (typeof cached !== 'object' || cached === null || !('cachedAt' in cached) || !('cards' in cached)) return null
+    const entry = cached as { cachedAt: unknown; cards: unknown }
+    if (typeof entry.cachedAt !== 'number' || Date.now() - entry.cachedAt >= LAUNCH_GALLERY_CACHE_TTL || !Array.isArray(entry.cards)) return null
+    const cards = entry.cards.filter(isLaunchGalleryCard)
+    return cards.length ? cards : null
+  } catch {
+    return null
+  }
+}
+
+function writeLaunchGalleryCache(world: 'moon' | 'mars', cards: NasaGalleryCard[]) {
+  try {
+    window.localStorage.setItem(`${LAUNCH_GALLERY_CACHE_PREFIX}:${world}`, JSON.stringify({ cachedAt: Date.now(), cards }))
+  } catch {
+    return
+  }
+}
+
+async function fetchLaunchGalleryFromNasa(world: 'moon' | 'mars') {
+  const query = world === 'moon' ? 'LROC' : 'MAVEN Mars atmosphere'
+  const url = new URL('https://images-api.nasa.gov/search')
+  url.searchParams.set('q', query)
+  url.searchParams.set('media_type', 'image')
+  const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4000) })
+  if (!response.ok) throw new Error(`NASA image search returned ${response.status}.`)
+  const payload = await response.json() as {
+    collection?: {
+      items?: Array<{
+        data?: Array<{ title?: string; nasa_id?: string; description?: string }>
+        links?: Array<{ href?: string }>
+      }>
+    }
+  }
+  const results: NasaGalleryCard[] = []
+  for (const item of payload.collection?.items ?? []) {
+    const metadata = item.data?.[0]
+    const title = metadata?.title?.trim() ?? ''
+    const imageUrl = item.links?.[0]?.href ?? ''
+    if (!title || /artist|concept|briefing|illustration|render|diagram/i.test(title)) continue
+    if (world === 'moon' ? !/lroc|lunar|moon|crater|tycho|mare/i.test(title) : !/mars|martian/i.test(title)) continue
+    if (!/^https:\/\/images-assets\.nasa\.gov\//i.test(imageUrl) || !/\.(jpe?g)(\?|$)/i.test(imageUrl)) continue
+    const nasaId = metadata?.nasa_id
+    if (!nasaId || results.some((card) => card.imageUrl === imageUrl)) continue
+    results.push({
+      title,
+      imageUrl,
+      credit: 'NASA',
+      caption: metadata?.description?.trim() || title,
+      mission: world === 'moon' ? 'Lunar Reconnaissance Orbiter' : 'MAVEN / NASA Mars missions',
+      link: `https://images.nasa.gov/details/${encodeURIComponent(nasaId)}`,
+    })
+    if (results.length >= 6) break
+  }
+  return results
+}
+
+export async function fetchSuccessfulLaunchGallery(world: 'moon' | 'mars' | 'earth') {
+  if (world === 'earth') return []
+  const cached = readLaunchGalleryCache(world)
+  if (cached) return cached
+
+  let cards: NasaGalleryCard[]
+  try {
+    cards = await fetchLaunchGalleryFromNasa(world)
+  } catch {
+    cards = []
+  }
+  if (cards.length === 0) cards = LAUNCH_FALLBACKS[world]
+  writeLaunchGalleryCache(world, cards)
+  return cards
+}
