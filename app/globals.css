@@ -2071,3 +2071,195 @@ body {
 @media (max-width: 760px) {
   .launch-autopilot-control { position: absolute; top: 49px; right: 118px; min-height: 38px; font-size: 11px; }
 }
+
+.launch-control-screen { justify-content: flex-start; gap: 17px; min-height: calc(100vh - 75px); padding-top: clamp(16px, 2vw, 28px); padding-bottom: 24px; }
+.launch-control-header { min-height: 34px; }
+.launch-control-header .launch-game-vehicle { display: flex; align-items: center; gap: 8px; }
+.launch-game-vehicle svg { width: 15px; height: 15px; color: var(--launch-accent, var(--mint)); }
+.launch-header-divider { color: #3e5961; }
+.launch-control-screen .launch-autopilot-control { position: static; }
+.launch-control-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; width: min(100%, 1360px); margin: 0 auto; }
+.launch-control-heading > div { min-width: 0; }
+.launch-control-kicker { color: #8bcfc2; font: 700 12px 'Courier New', monospace; letter-spacing: .14em; }
+.launch-control-heading h1 { margin: 5px 0 3px; color: #edf3ef; font: 400 clamp(26px, 3.2vw, 38px) Georgia, serif; letter-spacing: -.04em; }
+.launch-control-heading p { margin: 0; color: #9aaeb0; font-size: 15px; line-height: 1.5; }
+.launch-start-button, .launch-revise-button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid rgba(121,227,208,.34); border-radius: 5px; color: #10221f; background: #8ce4ce; cursor: pointer; font-weight: 750; transition: background .15s, transform .15s; }
+.launch-start-button:hover, .launch-revise-button:hover { background: #b5f4e2; transform: translateY(-1px); }
+.launch-start-button:focus-visible, .launch-revise-button:focus-visible, .launch-control-console button:focus-visible, .nasa-launch-gallery button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.launch-start-button svg { width: 15px; height: 15px; }
+.launch-flight-status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(144,170,179,.2); border-radius: 4px; color: #c2d2d0; background: rgba(11,20,28,.7); font: 700 11px 'Courier New', monospace; letter-spacing: .1em; }
+.launch-status-good { color: #9ef0d4; border-color: rgba(121,227,208,.38); }.launch-status-review { color: #efc181; border-color: rgba(239,193,129,.35); }
+.launch-flight-status svg { width: 14px; height: 14px; }
+.launch-control-layout { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(330px, .88fr); align-items: stretch; gap: 12px; width: min(100%, 1360px); margin: 0 auto; }
+.launch-map-stage, .launch-control-console { min-width: 0; border: 1px solid rgba(141,168,180,.16); border-radius: 8px; background: rgba(10,18,26,.78); }
+.launch-map-stage { padding: 11px; }
+.launch-control-map { padding: 0; margin: 0; border: 0; background: transparent; }
+.launch-control-map .launch-map-heading { min-height: 25px; }
+.launch-control-map .launch-map-heading > span { font-size: 12px; }
+.launch-control-map .launch-map-heading > strong { font-size: 11px; }
+.launch-control-map .launch-map-display { height: clamp(235px, 34vh, 390px); margin-top: 8px; }
+.launch-control-map .launch-map-grid { stroke: rgba(149,184,190,.1); stroke-width: 1; }
+.launch-control-map .launch-map-label { fill: #bfd1ce; font: 700 14px 'Courier New', monospace; letter-spacing: .08em; }
+.launch-control-map .launch-map-sub-label { fill: #829a9c; font-size: 10px; }
+.launch-control-map .launch-map-home-label, .launch-control-map .launch-map-destination-label { z-index: 1; padding: 4px 6px; border: 1px solid rgba(141,168,180,.15); border-radius: 3px; color: #a9c0bf; background: rgba(8,18,25,.66); font-size: 9px; }
+.launch-control-map .launch-map-home-label { display: flex; align-items: center; gap: 4px; }
+.launch-control-map .launch-map-home-label svg { width: 10px; height: 10px; color: #72dfc9; }
+.launch-control-map .launch-map-destination-label { color: #e7d497; }
+.launch-control-map .launch-map-rocket { z-index: 2; width: 21px; height: 21px; color: var(--launch-accent, #ffd879); animation: none; transition: left .2s linear, top .2s linear, transform .15s; }
+.launch-control-map .launch-map-rocket svg { width: 100%; height: 100%; }
+.launch-control-map .launch-map-status { color: #90a6a7; font-size: 10px; }
+.launch-control-map .launch-map-status span:last-child { display: flex; align-items: center; gap: 4px; color: #d9c887; }
+.launch-control-map .launch-map-status svg { width: 12px; height: 12px; }
+.launch-stage-strip { display: flex; gap: 8px; padding: 12px 1px 10px; border-bottom: 1px solid rgba(141,168,180,.1); }
+.launch-stage-strip > div { display: flex; flex: 1; align-items: center; gap: 7px; min-width: 0; color: #6f858d; }
+.launch-stage-strip > div > span { display: grid; flex: 0 0 auto; width: 22px; height: 22px; place-items: center; border: 1px solid rgba(141,168,180,.2); border-radius: 50%; font: 700 10px 'Courier New', monospace; }
+.launch-stage-strip > div > span svg { width: 12px; height: 12px; }
+.launch-stage-strip small { overflow: hidden; font: 700 9px 'Courier New', monospace; letter-spacing: .07em; text-overflow: ellipsis; white-space: nowrap; }
+.launch-stage-strip .launch-stage-current { color: #9debd3; }.launch-stage-current > span { border-color: rgba(121,227,208,.52); background: rgba(121,227,208,.12); }.launch-stage-done { color: #78d5be !important; }
+.launch-flight-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 7px; padding: 10px 0 8px; }
+.launch-flight-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 5px; padding: 8px; border: 1px solid rgba(141,168,180,.12); border-radius: 4px; background: rgba(15,27,36,.64); }
+.launch-flight-metrics span { color: #82999b; font: 700 9px 'Courier New', monospace; letter-spacing: .08em; }
+.launch-flight-metrics strong { overflow: hidden; color: #e1ede8; font: 500 clamp(13px, 1.5vw, 18px) 'Courier New', monospace; text-overflow: ellipsis; white-space: nowrap; }
+.launch-flight-metrics strong small { color: #82999b; font-size: 9px; }
+.launch-load-readout { display: flex; align-items: center; gap: 7px; padding: 8px 4px 1px; margin: 0; color: #8da1a2; font: 700 9px 'Courier New', monospace; letter-spacing: .06em; }
+.launch-load-readout svg { width: 13px; height: 13px; color: #97cfc1; }
+.launch-load-readout span { flex: 1; }.launch-load-readout b { color: #b6c7c3; font-size: 9px; }
+.launch-control-console { display: flex; flex-direction: column; justify-content: space-between; }
+.launch-console-panel { display: flex; flex: 1; flex-direction: column; padding: clamp(14px, 2vw, 20px); }
+.launch-phase-heading { display: flex; align-items: center; gap: 11px; }
+.launch-phase-index { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(121,227,208,.3); border-radius: 50%; color: #a5e9d7; background: rgba(121,227,208,.07); font: 700 12px 'Courier New', monospace; }
+.launch-phase-heading h2 { margin: 4px 0 0; color: #e8efeb; font: 400 clamp(17px, 2vw, 22px) Georgia, serif; }
+.launch-console-copy { min-height: 44px; margin: 14px 0 10px; color: #95a8aa; font-size: 14px; line-height: 1.5; }
+.launch-console-copy b { color: #b9ead9; font-family: 'Courier New', monospace; }
+.launch-phase-progress { height: 4px; overflow: hidden; border-radius: 5px; background: rgba(141,168,180,.15); }
+.launch-phase-progress i { display: block; height: 100%; border-radius: inherit; background: var(--launch-accent, var(--mint)); transition: width .15s linear; }
+.launch-control-readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 17px; }
+.launch-control-readouts > div { min-width: 0; padding: 10px; border: 1px solid rgba(141,168,180,.14); border-radius: 5px; background: rgba(15,27,36,.58); }
+.launch-control-readouts > div > span { display: flex; align-items: center; gap: 5px; color: #849b9d; font: 700 9px 'Courier New', monospace; letter-spacing: .1em; }
+.launch-control-readouts > div > span svg { width: 12px; height: 12px; color: #8ad8c4; }
+.launch-control-readouts strong { display: block; margin: 8px 0; color: #e5eee9; font: 500 20px 'Courier New', monospace; }
+.launch-control-readouts strong small { color: #8da6a3; font-size: 12px; }
+.launch-readout-track { height: 3px; overflow: hidden; border-radius: 4px; background: rgba(141,168,180,.17); }
+.launch-readout-track i { display: block; height: 100%; border-radius: inherit; background: #8ce4ce; transition: width .12s linear; }
+.launch-phase-scores { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.launch-phase-scores > span { display: flex; align-items: center; gap: 4px; padding: 5px 6px; border: 1px solid rgba(121,227,208,.2); border-radius: 3px; color: #9debd3; font: 700 9px 'Courier New', monospace; }
+.launch-phase-scores svg { width: 10px; height: 10px; }.launch-phase-scores b { color: #d8e7e0; }.launch-phase-scores .phase-score-miss { border-color: rgba(235,159,123,.32); color: #eb9f7b; }
+.launch-key-guide { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; color: #8ba0a2; font-size: 11px; }
+.launch-key-guide > span { display: inline-flex; align-items: center; gap: 3px; }
+.launch-key-guide kbd { display: inline-grid; width: 18px; height: 20px; place-items: center; border: 1px solid rgba(141,168,180,.26); border-radius: 3px; color: #d8e5e0; background: rgba(17,30,39,.8); font: 700 10px 'Courier New', monospace; }
+.launch-control-dpad { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 13px; }
+.launch-control-dpad > div { display: flex; flex-direction: column; gap: 5px; }
+.launch-control-dpad button { display: grid; width: 36px; height: 32px; place-items: center; border: 1px solid rgba(141,168,180,.26); border-radius: 4px; color: #d7e6e1; background: rgba(27,43,51,.9); cursor: pointer; }
+.launch-control-dpad button:disabled { opacity: .4; cursor: not-allowed; }
+.launch-control-dpad button:not(:disabled):hover { border-color: rgba(121,227,208,.6); color: #a0f1da; }
+.launch-control-dpad svg { width: 15px; height: 15px; }
+.launch-ready-actions { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: auto; padding-top: 15px; }
+.launch-ready-actions > span { display: inline-flex; align-items: center; gap: 4px; color: #819696; font-size: 10px; }
+.launch-ready-actions svg { width: 12px; height: 12px; color: #e7c784; }
+.launch-revise-button { min-height: 36px; padding: 0 11px; border-color: rgba(141,168,180,.24); color: #d0dcd8; background: rgba(20,32,40,.68); font-size: 12px; }
+.launch-console-footer { display: flex; justify-content: space-between; gap: 8px; padding: 10px 13px; border-top: 1px solid rgba(141,168,180,.1); color: #788d91; font: 700 9px 'Courier New', monospace; letter-spacing: .07em; }
+.launch-console-footer > span:first-child { display: flex; align-items: center; gap: 5px; }.launch-console-footer svg { width: 11px; height: 11px; color: #c6ab6e; }
+.launch-phase-feedback { margin-top: 12px; }
+.launch-control-note { display: flex; align-items: center; justify-content: center; gap: 6px; width: min(100%, 1360px); margin: -5px auto 0; color: #70858a; font-size: 11px; text-align: center; }
+.launch-control-note svg { width: 12px; height: 12px; }
+
+.multiplayer-room-card { width: min(100%, 780px); padding: 16px; margin: 18px 0 0; border: 1px solid rgba(121,227,208,.2); border-radius: 8px; background: linear-gradient(125deg, rgba(15,36,39,.7), rgba(11,19,28,.84)); }
+.multiplayer-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.multiplayer-card-eyebrow, .multiplayer-live-badge { display: inline-flex; align-items: center; gap: 6px; color: #91d6c7; font: 700 10px 'Courier New', monospace; letter-spacing: .12em; }
+.multiplayer-card-eyebrow svg { width: 13px; height: 13px; }
+.multiplayer-room-card h2 { margin: 6px 0 4px; color: #e5efea; font: 400 21px Georgia, serif; }
+.multiplayer-room-card > p { max-width: 620px; margin: 5px 0 12px; color: #8fa1a5; font-size: 13px; line-height: 1.55; }
+.multiplayer-live-badge { flex: 0 0 auto; padding: 5px 7px; border: 1px solid rgba(121,227,208,.2); border-radius: 4px; font-size: 9px; }
+.multiplayer-live-badge svg { width: 11px; height: 11px; }
+.multiplayer-room-actions { display: grid; grid-template-columns: minmax(150px, 1fr) auto; align-items: end; gap: 9px; }
+.multiplayer-field { display: flex; min-width: 0; flex-direction: column; gap: 5px; color: #9aafb0; font-size: 11px; }
+.multiplayer-field input { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid rgba(141,168,180,.22); border-radius: 4px; color: #e1ece7; background: rgba(7,14,21,.74); font: 13px 'Courier New', monospace; }
+.multiplayer-field input:focus-visible { border-color: #8ce4ce; outline: 2px solid rgba(140,228,206,.3); outline-offset: 1px; }
+.multiplayer-primary-button, .multiplayer-secondary-button, .multiplayer-leave-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 11px; border: 1px solid rgba(121,227,208,.32); border-radius: 4px; color: #bfeadd; background: rgba(20,47,48,.68); cursor: pointer; font-size: 12px; font-weight: 650; white-space: nowrap; }
+.multiplayer-primary-button { color: #14251f; background: #8ce4ce; }
+.multiplayer-primary-button:disabled, .multiplayer-secondary-button:disabled { opacity: .45; cursor: not-allowed; }
+.multiplayer-primary-button svg, .multiplayer-secondary-button svg, .multiplayer-leave-button svg { width: 14px; height: 14px; }
+.multiplayer-room-actions > form { display: contents; }
+.multiplayer-join-form { display: flex; grid-column: 1 / -1; align-items: end; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(141,168,180,.11); }
+.multiplayer-join-form .multiplayer-field { flex: 1; }
+.multiplayer-connected-state { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 9px; }
+.multiplayer-field-label { display: block; color: #8ea3a3; font: 700 9px 'Courier New', monospace; letter-spacing: .11em; }
+.multiplayer-room-code { display: block; margin-top: 3px; color: #eff4e6; font: 700 22px 'Courier New', monospace; letter-spacing: .16em; }
+.multiplayer-player-list { display: flex; grid-column: 1 / -1; flex-wrap: wrap; gap: 6px; }
+.multiplayer-player-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid rgba(141,168,180,.14); border-radius: 20px; color: #c5d5d0; background: rgba(8,17,24,.7); font-size: 11px; }
+.multiplayer-player-pill i, .multiplayer-presence-live i { width: 6px; height: 6px; border-radius: 50%; background: #77d7bd; box-shadow: 0 0 8px rgba(119,215,189,.42); }
+.multiplayer-player-pill small { color: #819694; font-size: 9px; text-transform: capitalize; }
+.multiplayer-leave-button { grid-column: 1 / -1; justify-self: start; min-height: 31px; padding: 0 8px; border-color: rgba(237,157,132,.2); color: #d39b88; background: rgba(45,26,25,.28); font-size: 10px; }
+.multiplayer-feedback { min-height: 15px; margin: 8px 0 0 !important; color: #a9dcca !important; font-size: 11px !important; }
+.multiplayer-presence { display: flex; align-items: center; gap: 10px; width: min(100% - 64px, 1360px); padding: 7px 10px; margin: 7px auto 0; border: 1px solid rgba(121,227,208,.15); border-radius: 5px; color: #879b9c; background: rgba(10,19,26,.72); font-size: 11px; }
+.multiplayer-presence-live { display: inline-flex; align-items: center; gap: 5px; color: #9cd9c9; font: 700 9px 'Courier New', monospace; letter-spacing: .08em; }
+.multiplayer-presence > strong { color: #e1ece6; font: 700 11px 'Courier New', monospace; letter-spacing: .12em; }
+.multiplayer-presence-names { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+.multiplayer-presence > button { display: grid; flex: 0 0 auto; width: 24px; height: 24px; place-items: center; border: 1px solid rgba(141,168,180,.16); border-radius: 4px; color: #aab8b5; background: transparent; cursor: pointer; }
+.multiplayer-presence > button svg { width: 12px; height: 12px; }
+
+.nasa-launch-gallery { width: min(calc(100% - 64px), 1120px); padding: 17px; margin: 16px auto 18px; border: 1px solid rgba(141,168,180,.17); border-radius: 8px; background: linear-gradient(125deg, rgba(17,29,37,.94), rgba(8,15,22,.97)); }
+.nasa-gallery-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.nasa-gallery-kicker { display: inline-flex; align-items: center; gap: 6px; color: #8fd7c6; font: 700 10px 'Courier New', monospace; letter-spacing: .1em; }
+.nasa-gallery-kicker svg { width: 12px; height: 12px; }
+.nasa-gallery-heading h2 { margin: 6px 0 3px; color: #eaf0e9; font: 400 clamp(22px, 3vw, 30px) Georgia, serif; }
+.nasa-gallery-heading p { margin: 0; color: #94a5a7; font-size: 13px; }
+.nasa-image-credit { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid rgba(141,168,180,.17); border-radius: 4px; color: #becbc4; font: 700 9px 'Courier New', monospace; letter-spacing: .1em; }
+.nasa-image-credit svg { width: 12px; height: 12px; color: #8dd8c5; }
+.nasa-featured-image { position: relative; overflow: hidden; aspect-ratio: 16 / 8.6; border: 1px solid rgba(141,168,180,.14); border-radius: 5px; background: #09131d; }
+.nasa-featured-image > img { width: 100%; height: 100%; object-fit: cover; }
+.nasa-featured-caption { position: absolute; right: 0; bottom: 0; left: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 30px 13px 11px; color: #f0f4ed; background: linear-gradient(transparent, rgba(3,9,14,.9)); font-size: 13px; }
+.nasa-featured-caption a, .nasa-gallery-disclaimer a { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; color: #a7e7d4; text-decoration: none; }
+.nasa-featured-caption a:hover, .nasa-gallery-disclaimer a:hover { text-decoration: underline; }
+.nasa-featured-caption svg, .nasa-gallery-disclaimer svg { width: 12px; height: 12px; }
+.nasa-gallery-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 7px; color: #829696; font: 700 10px 'Courier New', monospace; letter-spacing: .08em; }
+.nasa-gallery-controls > span { display: flex; align-items: center; gap: 8px; }.nasa-gallery-controls i { width: 25px; height: 1px; background: rgba(141,168,180,.32); }
+.nasa-gallery-controls > div { display: flex; gap: 5px; }
+.nasa-gallery-controls button { display: grid; width: 30px; height: 28px; place-items: center; border: 1px solid rgba(141,168,180,.2); border-radius: 4px; color: #d4e2dc; background: rgba(18,31,38,.86); cursor: pointer; }
+.nasa-gallery-controls button svg { width: 15px; height: 15px; }
+.nasa-gallery-rail { display: flex; gap: 8px; overflow-x: auto; padding: 2px 1px 8px; scroll-snap-type: x mandatory; scrollbar-color: rgba(121,227,208,.3) transparent; }
+.nasa-gallery-thumb { display: flex; flex: 0 0 min(24%, 190px); min-width: 125px; flex-direction: column; gap: 6px; padding: 5px; overflow: hidden; border: 1px solid rgba(141,168,180,.15); border-radius: 4px; color: #aebfbb; background: rgba(12,22,29,.86); cursor: pointer; text-align: left; scroll-snap-align: start; }
+.nasa-gallery-thumb-active { border-color: rgba(121,227,208,.7); background: rgba(24,57,54,.36); }
+.nasa-gallery-thumb img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.nasa-gallery-thumb span { display: -webkit-box; overflow: hidden; min-height: 28px; font-size: 10px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nasa-gallery-loading { display: grid; min-height: 180px; place-items: center; border: 1px solid rgba(141,168,180,.12); border-radius: 5px; color: #9fb6b5; background: radial-gradient(ellipse at 50% 100%, rgba(64,129,121,.12), transparent 65%), #0a131b; font-size: 13px; }
+.nasa-gallery-disclaimer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 9px 0 0; color: #718489; font-size: 10px; }
+
+@media (max-width: 980px) {
+  .launch-control-layout { grid-template-columns: 1fr; }
+  .launch-control-map .launch-map-display { height: clamp(240px, 38vw, 360px); }
+  .launch-console-panel { min-height: 390px; }
+}
+@media (max-width: 760px) {
+  .launch-control-screen { min-height: calc(100vh - 63px); gap: 12px; padding: 14px 16px 20px; }
+  .launch-control-header { align-items: flex-start; flex-wrap: wrap; min-height: 65px; }
+  .launch-control-header .launch-game-vehicle { max-width: 45%; font-size: 9px; }
+  .launch-control-screen .launch-autopilot-control { position: absolute; top: 48px; right: 16px; min-height: 34px; font-size: 10px; }
+  .launch-control-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .launch-control-heading h1 { font-size: 27px; }
+  .launch-control-heading p { font-size: 13px; }
+  .launch-start-button, .launch-flight-status { align-self: stretch; }
+  .launch-control-layout { gap: 9px; }
+  .launch-map-stage { padding: 8px; }
+  .launch-control-map .launch-map-display { height: 235px; }
+  .launch-console-panel { min-height: 350px; padding: 14px; }
+  .launch-control-note { align-items: flex-start; width: calc(100% - 32px); line-height: 1.5; }
+  .launch-control-note svg { flex: 0 0 auto; margin-top: 2px; }
+  .multiplayer-room-card { padding: 13px; }
+  .multiplayer-room-actions { grid-template-columns: 1fr; }
+  .multiplayer-room-actions > form { display: block; }
+  .multiplayer-room-actions > form > button { width: 100%; }
+  .multiplayer-join-form { display: flex !important; grid-column: auto; }
+  .multiplayer-presence { width: calc(100% - 32px); gap: 7px; font-size: 10px; }
+  .multiplayer-presence-names { display: none; }
+  .nasa-launch-gallery { width: calc(100% - 32px); padding: 12px; }
+  .nasa-gallery-heading { align-items: flex-start; }
+  .nasa-gallery-heading p { max-width: 260px; font-size: 12px; line-height: 1.5; }
+  .nasa-image-credit { padding: 5px; font-size: 8px; }
+  .nasa-featured-image { aspect-ratio: 4 / 3; }
+  .nasa-featured-caption { align-items: flex-start; flex-direction: column; gap: 6px; padding: 33px 9px 8px; font-size: 11px; }
+  .nasa-gallery-thumb { flex-basis: 37%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .launch-control-screen *, .nasa-launch-gallery * { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}

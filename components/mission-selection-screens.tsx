@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ArrowUpRight, BookOpen, Check, Clock3, Compass, Crosshair, Globe2, Moon, Orbit, RadioTower, Satellite, Sparkles, Target } from 'lucide-react'
 import type { DifficultyId, MissionProfile, SpacecraftSize } from './mission-data'
 import { DIFFICULTIES, getBudgetLimit, MISSIONS, SPACECRAFT_SIZES } from './mission-data'
@@ -9,16 +9,17 @@ import { ChoiceWithWhy, WhyButton } from './mission-choice-help'
 import { DataNote, NasaTag, PageHeading, PrimaryButton } from './mission-ui'
 import type { PlayMode } from './team-mode'
 
-export function WelcomeScreen({ onPlay, onSources, difficulty, onDifficultyChange, playMode, playerCount, onPlayModeChange, onPlayerCountChange, sandboxEnabled, onSandboxChange, highContrast, onHighContrastChange, threeDEnabled, onThreeDChange }: { onPlay: () => void; onSources: () => void; difficulty: DifficultyId; onDifficultyChange: (difficulty: DifficultyId) => void; playMode: PlayMode; playerCount: number; onPlayModeChange: (mode: PlayMode) => void; onPlayerCountChange: (count: number) => void; sandboxEnabled: boolean; onSandboxChange: (enabled: boolean) => void; highContrast: boolean; onHighContrastChange: (enabled: boolean) => void; threeDEnabled: boolean; onThreeDChange: (enabled: boolean) => void }) {
+export function WelcomeScreen({ onPlay, onSources, difficulty, onDifficultyChange, playMode, playerCount, onPlayModeChange, onPlayerCountChange, sandboxEnabled, onSandboxChange, highContrast, onHighContrastChange, threeDEnabled, onThreeDChange, multiplayerPanel }: { onPlay: () => void; onSources: () => void; difficulty: DifficultyId; onDifficultyChange: (difficulty: DifficultyId) => void; playMode: PlayMode; playerCount: number; onPlayModeChange: (mode: PlayMode) => void; onPlayerCountChange: (count: number) => void; sandboxEnabled: boolean; onSandboxChange: (enabled: boolean) => void; highContrast: boolean; onHighContrastChange: (enabled: boolean) => void; threeDEnabled: boolean; onThreeDChange: (enabled: boolean) => void; multiplayerPanel?: ReactNode }) {
   const [showTutorial, setShowTutorial] = useState(false)
   return <main className="welcome-screen" id="top">
     <div className="welcome-copy">
       <div className="challenge-label"><span className="challenge-orbit"><Globe2 aria-hidden="true" /></span><span>SPACE ADVENTURE<span className="challenge-subline">A GAME FOR CURIOUS EXPLORERS</span></span></div>
       <div className="welcome-title-wrap"><p className="eyebrow">MEET NOVA, YOUR ROBOT GUIDE <span className="eyebrow-rule" /></p><h1>Build a rocket.<br /><em>Help a planet.</em></h1></div>
       <p className="welcome-description">Pick a planet, build a ship, and bring home its discoveries.</p>
-      <div className="welcome-actions"><button className="play-button" onClick={onPlay}><span className="play-icon"><Sparkles aria-hidden="true" /></span>Start an adventure<ArrowUpRight aria-hidden="true" /></button><button className="tutorial-toggle" type="button" aria-expanded={showTutorial} onClick={() => setShowTutorial((current) => !current)}><Clock3 aria-hidden="true" />{showTutorial ? 'Hide how to play' : 'How to play'}</button><button className="tutorial-toggle sources-toggle" type="button" onClick={onSources}><BookOpen aria-hidden="true" />Real NASA stories</button><a className="tutorial-toggle sources-toggle" href="/mptest" style={{ textDecoration: 'none' }}><BookOpen aria-hidden="true" />Create room</a><a className="tutorial-toggle sources-toggle" href="/nasa-gallery" style={{ textDecoration: 'none' }}><Globe2 aria-hidden="true" />NASA research</a></div>
+      <div className="welcome-actions"><button className="play-button" onClick={onPlay}><span className="play-icon"><Sparkles aria-hidden="true" /></span>Start an adventure<ArrowUpRight aria-hidden="true" /></button><button className="tutorial-toggle" type="button" aria-expanded={showTutorial} onClick={() => setShowTutorial((current) => !current)}><Clock3 aria-hidden="true" />{showTutorial ? 'Hide how to play' : 'How to play'}</button><button className="tutorial-toggle sources-toggle" type="button" onClick={onSources}><BookOpen aria-hidden="true" />Real NASA stories</button><a className="tutorial-toggle sources-toggle" href="/nasa-gallery" style={{ textDecoration: 'none' }}><Globe2 aria-hidden="true" />NASA research</a></div>
+      {multiplayerPanel}
       <section className="play-mode-setup" aria-label="Choose solo or team mode">
-        <div className="play-mode-heading"><span><b>Pick your crew</b><small>Play alone or share one screen with friends.</small></span><span className="eyebrow">CREW</span></div>
+        <div className="play-mode-heading"><span><b>Pick your crew</b><small>Play solo or bring your crew online.</small></span><span className="eyebrow">CREW</span></div>
         <div className="play-mode-options" role="group" aria-label="Play mode">
           <button type="button" className={playMode === 'solo' ? 'play-mode-selected' : ''} onClick={() => onPlayModeChange('solo')} aria-pressed={playMode === 'solo'}><strong>Play alone</strong><small>One player, all jobs</small></button>
           <button type="button" className={playMode === 'team' ? 'play-mode-selected' : ''} onClick={() => onPlayModeChange('team')} aria-pressed={playMode === 'team'}><strong>Play together</strong><small>Up to four players</small></button>
