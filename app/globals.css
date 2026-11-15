@@ -2031,3 +2031,43 @@ body {
   .launch-world { scroll-behavior: auto; }
   .launch-particle-canvas { visibility: hidden; }
 }
+
+.launch-trajectory-map { padding: 9px 10px 7px; margin-top: 10px; border: 1px solid rgba(121,227,208,.2); border-radius: 8px; background: linear-gradient(120deg, rgba(14,39,47,.72), rgba(7,15,23,.74)); }
+.launch-map-heading, .launch-map-heading > span, .launch-map-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.launch-map-heading > span { justify-content: flex-start; color: #a4e7d5; font: 800 16px 'Courier New', monospace; letter-spacing: .1em; }
+.launch-map-heading svg { width: 15px; height: 15px; color: var(--mint); }
+.launch-map-heading > strong { max-width: 58%; overflow: hidden; color: #dae8e4; font: 600 16px 'Courier New', monospace; text-overflow: ellipsis; white-space: nowrap; }
+.launch-map-display { position: relative; height: 62px; overflow: hidden; margin-top: 6px; border: 1px solid rgba(121,227,208,.12); border-radius: 5px; background: radial-gradient(ellipse at 9% 80%, rgba(84,186,173,.2), transparent 35%), #09131d; }
+.launch-map-display > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.launch-map-grid { fill: none; stroke: rgba(149,184,190,.11); stroke-width: .7; }
+.launch-map-route { fill: none; stroke: #8ce8ce; stroke-dasharray: 4 4; stroke-width: 1.6; filter: drop-shadow(0 0 3px rgba(140,232,206,.5)); }
+.launch-map-home { fill: #69c5bc; stroke: #c7fff0; stroke-width: 1.5; }
+.launch-map-destination { fill: #ffd879; stroke: #fff3bd; stroke-width: 1.5; }
+.launch-map-home-label, .launch-map-destination-label { position: absolute; color: #b6c8c6; font: 700 14px 'Courier New', monospace; letter-spacing: .08em; }
+.launch-map-home-label { bottom: 3px; left: 3%; }
+.launch-map-destination-label { top: 10px; right: 2%; }
+.launch-map-rocket { position: absolute; top: 59%; left: 5%; width: 16px; height: 16px; color: #ffe599; filter: drop-shadow(0 0 5px rgba(255,229,153,.8)); animation: launch-map-flight 4s linear infinite; }
+.launch-map-status { margin-top: 5px; color: #80999c; font: 700 14px 'Courier New', monospace; letter-spacing: .07em; }
+.launch-map-status span:last-child { color: #e5bf74; }
+.launch-ring-pointer { --separation-angle: 0deg; width: 5px; background: linear-gradient(to top, #ffdc84, rgba(255,220,132,.78) 55%, rgba(255,220,132,.05)); box-shadow: 0 0 8px rgba(255,220,132,.72); transform: rotate(var(--separation-angle)); will-change: transform; }
+.launch-ring-pointer::after { position: absolute; top: -3px; left: -3px; width: 11px; height: 11px; border: 1px solid #fff0b8; border-radius: 50%; background: #ffe69e; box-shadow: 0 0 12px #ffe69e; content: ''; }
+@keyframes launch-map-flight {
+  0% { top: 59%; left: 5%; transform: rotate(45deg); }
+  50% { top: 10%; left: 47%; transform: rotate(70deg); }
+  100% { top: 27%; left: 87%; transform: rotate(85deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .launch-map-rocket { top: 36%; left: 47%; animation: none; }
+}
+.launch-autopilot-control { display: flex; align-items: center; gap: 7px; color: #d3dddf; font: 800 13px 'Courier New', monospace; letter-spacing: .08em; pointer-events: auto; }
+.launch-autopilot-control input { position: relative; width: 40px; height: 22px; margin: 0; appearance: none; border: 1px solid rgba(211,221,223,.56); border-radius: 999px; background: rgba(37,52,63,.9); cursor: pointer; transition: background .15s, border-color .15s; }
+.launch-autopilot-control input::after { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #d3dddf; content: ''; transition: transform .15s; }
+.launch-autopilot-control input:checked { border-color: var(--mint); background: #23796c; }
+.launch-autopilot-control input:checked::after { background: #fff; transform: translateX(18px); }
+.launch-autopilot-control input:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.launch-autopilot-control input:disabled { cursor: not-allowed; opacity: .7; }
+.launch-phase-feedback > small { flex: 0 0 auto; color: #9debd3; font: 700 13px 'Courier New', monospace; }
+.launch-ready-card .launch-controls-guide { max-width: 400px; margin: 8px auto 0; color: #b6c8c6; font-size: 15px; line-height: 1.5; }
+@media (max-width: 760px) {
+  .launch-autopilot-control { position: absolute; top: 49px; right: 118px; min-height: 38px; font-size: 11px; }
+}

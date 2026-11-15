@@ -12,7 +12,7 @@ export interface LaunchEngineElements {
   rocket: EngineElement<HTMLDivElement>
   rocketNose: EngineElement<SVGPathElement>
   rocketStageBody: EngineElement<SVGRectElement>
-  rocketFins: EngineElement<SVGPathElement>
+  rocketFins: EngineElement<SVGPolygonElement>
   flame: EngineElement<HTMLDivElement>
   flameCore: EngineElement<HTMLDivElement>
   pad: EngineElement<HTMLDivElement>
@@ -62,6 +62,7 @@ export interface LaunchEngineOptions {
   safeHalfWidth: number
   quality: LaunchQuality
   smoothMode: boolean
+  autoPilot: boolean
   rocketId: string
   missionId: MissionId
   elements: LaunchEngineElements
@@ -123,6 +124,7 @@ export function useLaunchEngine({
   safeHalfWidth,
   quality,
   smoothMode,
+  autoPilot,
   rocketId,
   missionId,
   elements,
@@ -584,7 +586,9 @@ export function useLaunchEngine({
         }
         if (activePhase === 'throttle') {
           const target = 57 + Math.sin(phaseElapsed * 1.25) * 8 + Math.sin(phaseElapsed * 2.1) * 2
-          const nextThrottle = Math.max(0, Math.min(100, throttleRef.current + (controls.holding.current ? 2.1 * response : -0.45) * delta * 30))
+          const nextThrottle = autoPilot
+            ? target
+            : Math.max(0, Math.min(100, throttleRef.current + (controls.holding.current ? 2.1 * response : -0.45) * delta * 30))
           throttleRef.current = nextThrottle
           if (elements.throttleNeedle.current) elements.throttleNeedle.current.style.transform = `translateX(calc(${nextThrottle}% - 50%))`
           if (elements.throttleTarget.current) elements.throttleTarget.current.style.transform = `translateX(calc(${target}% - 50%))`
@@ -600,7 +604,9 @@ export function useLaunchEngine({
           if (nextThrottle > target + safeHalfWidth * 1.8) controls.safeSamples.current.stress += 1
         } else if (activePhase === 'turn') {
           const target = 12 + Math.sin(phaseElapsed * 0.72) * 13 + Math.sin(phaseElapsed * 1.42) * 3
-          const nextHeading = Math.max(-45, Math.min(45, headingRef.current + controls.steer.current * response * 3.2 * delta * 30))
+          const nextHeading = autoPilot
+            ? target
+            : Math.max(-45, Math.min(45, headingRef.current + controls.steer.current * response * 3.2 * delta * 30))
           headingRef.current = nextHeading
           if (readoutUpdate) {
             if (elements.headingValue.current) elements.headingValue.current.textContent = String(Math.round(nextHeading))
@@ -610,7 +616,9 @@ export function useLaunchEngine({
           controls.turnSamples.current.error += Math.abs(nextHeading - target)
         } else {
           controls.separationAngle.current = (phaseElapsed * 168) % 360
-          if (elements.separationPointer.current) elements.separationPointer.current.style.transform = `rotate(${controls.separationAngle.current}deg)`
+          if (elements.separationPointer.current) {
+            elements.separationPointer.current.style.setProperty('--separation-angle', `${controls.separationAngle.current}deg`)
+          }
         }
         if (phaseElapsed >= phaseSeconds && !callbackSent) {
           callbackSent = true
@@ -695,7 +703,7 @@ export function useLaunchEngine({
       resizeObserver.disconnect()
       context?.clearRect(0, 0, pool.width, pool.height)
     }
-  }, [phase, phaseDone, phaseSeconds, payloadRatio, response, safeHalfWidth, quality, smoothMode, rocketId, missionId])
+  }, [phase, phaseDone, phaseSeconds, payloadRatio, response, safeHalfWidth, quality, smoothMode, autoPilot, rocketId, missionId])
 
   return { totalElapsedRef }
 }

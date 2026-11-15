@@ -1,18 +1,81 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+
+const assert = require('node:assert/strict')
 const { spawn } = require('node:child_process')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const { io } = require('socket.io-client')
 
-async function connect(name) {
-  return new Promise((resolve, reject) => {
-    const socket = io('http://127.0.0.1:4000', {
-      transports: ['websocket'],
-    })
+function startServer(databasePath) {
+  const server = spawn(process.execPath, ['server/index.js'], {
+    cwd: process.cwd(),
+    env: { ...process.env, PORT: '0', ROOM_DATABASE_PATH: databasePath },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
 
-    socket.on('connect', () => resolve({ socket, name }))
-    socket.on('connect_error', (error) => reject(error))
+  return new Promise((resolve, reject) => {
+    let output = ''
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      server.kill('SIGTERM')
+      reject(new Error(`Multiplayer server did not start: ${output}`))
+    }, 10000)
+
+    server.stdout.on('data', (chunk) => {
+      output += chunk.toString()
+      const match = output.match(/listening on http:\/\/0\.0\.0\.0:(\d+)/)
+      if (match && !settled) {
+        settled = true
+        clearTimeout(timeout)
+        resolve({ process: server, port: Number(match[1]) })
+      }
+    })
+    server.stderr.on('data', (chunk) => { output += chunk.toString() })
+    server.on('error', (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(error)
+    })
+    server.on('exit', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(new Error(`Multiplayer server exited (${code}): ${output}`))
+    })
   })
 }
 
-async function waitForEvent(socket, eventName, timeoutMs = 5000) {
+function stopServer(child) {
+  return new Promise((resolve, reject) => {
+    if (child.exitCode !== null) {
+      resolve()
+      return
+    }
+    const timeout = setTimeout(() => reject(new Error('Multiplayer server did not shut down')), 5000)
+    child.once('exit', () => {
+      clearTimeout(timeout)
+      resolve()
+    })
+    child.kill('SIGTERM')
+  })
+}
+
+function connect(port, name) {
+  return new Promise((resolve, reject) => {
+    const socket = io(`http://127.0.0.1:${port}`, {
+      transports: ['websocket'],
+      reconnection: false,
+    })
+    socket.once('connect', () => resolve({ socket, name }))
+    socket.once('connect_error', reject)
+  })
+}
+
+function waitForEvent(socket, eventName, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${eventName}`)), timeoutMs)
     socket.once(eventName, (payload) => {
@@ -23,58 +86,71 @@ async function waitForEvent(socket, eventName, timeoutMs = 5000) {
 }
 
 async function main() {
-  const server = spawn(process.execPath, ['server/index.js'], {
-    cwd: process.cwd(),
-    stdio: 'inherit',
-  })
-
-  await new Promise((resolve) => setTimeout(resolve, 800))
+  const databaseDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'mission-control-room-test-'))
+  const databasePath = path.join(databaseDirectory, 'rooms.sqlite')
+  let server
+  const sockets = []
 
   try {
-    const first = await connect('Alice')
-    const second = await connect('Bob')
-    const third = await connect('Cara')
-    const fourth = await connect('Dev')
+    server = await startServer(databasePath)
+    const players = await Promise.all(['Alice', 'Bob', 'Cara', 'Dev'].map(async (name) => {
+      const player = await connect(server.port, name)
+      sockets.push(player.socket)
+      return player
+    }))
 
-    first.socket.emit('room:create', { name: first.name })
-    const created = await waitForEvent(first.socket, 'room:created')
+    const createdEvent = waitForEvent(players[0].socket, 'room:created')
+    const createdStateEvent = waitForEvent(players[0].socket, 'room:state')
+    players[0].socket.emit('room:create', { name: players[0].name })
+    const created = await createdEvent
+    await createdStateEvent
     const roomCode = created.roomCode
 
-    second.socket.emit('room:join', { roomCode, name: second.name })
-    third.socket.emit('room:join', { roomCode, name: third.name })
-    fourth.socket.emit('room:join', { roomCode, name: fourth.name })
+    for (const [index, player] of players.slice(1).entries()) {
+      const joinedEvent = waitForEvent(player.socket, 'room:joined')
+      const stateEvents = players.slice(0, index + 2).map((roomPlayer) => waitForEvent(roomPlayer.socket, 'room:state'))
+      player.socket.emit('room:join', { roomCode, name: player.name })
+      await joinedEvent
+      await Promise.all(stateEvents)
+    }
 
-    await Promise.all([
-      waitForEvent(second.socket, 'room:joined'),
-      waitForEvent(third.socket, 'room:joined'),
-      waitForEvent(fourth.socket, 'room:joined'),
-    ])
+    async function updateDesign(player, field, value) {
+      const stateEvents = players.map((roomPlayer) => waitForEvent(roomPlayer.socket, 'room:state'))
+      player.socket.emit('intent', { field, value })
+      return Promise.all(stateEvents)
+    }
 
-    first.socket.emit('intent', { field: 'rocketId', value: 'sls' })
-    second.socket.emit('intent', { field: 'solarId', value: 'deployable' })
-    third.socket.emit('intent', { field: 'stations', value: 4 })
+    await updateDesign(players[0], 'rocketId', 'sls')
+    await updateDesign(players[1], 'solarId', 'deployable')
+    await updateDesign(players[2], 'stations', 4)
+    const synchronizedSnapshots = await updateDesign(players[3], 'instrumentIds', ['camera', 'radar'])
+    const firstSnapshot = synchronizedSnapshots[0]
+    assert.ok(firstSnapshot.design.rocketId === 'sls' && firstSnapshot.design.solarId === 'deployable')
+    assert.ok(synchronizedSnapshots.every((snapshot) => snapshot.version === firstSnapshot.version))
 
-    const roomSnapshots = await Promise.all([
-      waitForEvent(first.socket, 'room:state'),
-      waitForEvent(second.socket, 'room:state'),
-      waitForEvent(third.socket, 'room:state'),
-      waitForEvent(fourth.socket, 'room:state'),
-    ])
+    await stopServer(server.process)
+    server = await startServer(databasePath)
+    const returningPlayer = await connect(server.port, 'Alice')
+    sockets.push(returningPlayer.socket)
+    const rejoinedEvent = waitForEvent(returningPlayer.socket, 'room:joined')
+    const restoredStateEvent = waitForEvent(returningPlayer.socket, 'room:state')
+    returningPlayer.socket.emit('room:reconnect', { roomCode, playerId: created.playerId })
+    await rejoinedEvent
+    const restoredState = await restoredStateEvent
+    assert.equal(restoredState.design.rocketId, 'sls')
+    assert.equal(restoredState.design.solarId, 'deployable')
+    assert.equal(restoredState.design.stations, 4)
+    assert.deepEqual(restoredState.design.instrumentIds, ['camera', 'radar'])
 
-    const designState = roomSnapshots[0].design
-    const sameDesign = roomSnapshots.every((snapshot) => JSON.stringify(snapshot.design) === JSON.stringify(designState))
-    console.log(sameDesign ? 'PASS: multiplayer room state stays in sync' : 'FAIL: room state diverged')
-
-    first.socket.disconnect()
-    second.socket.disconnect()
-    third.socket.disconnect()
-    fourth.socket.disconnect()
-    server.kill('SIGTERM')
-  } catch (error) {
-    console.error('FAIL:', error)
-    server.kill('SIGTERM')
-    process.exitCode = 1
+    console.log('PASS: multiplayer state syncs and survives server restart')
+  } finally {
+    for (const socket of sockets) socket.disconnect()
+    if (server) await stopServer(server.process)
+    fs.rmSync(databaseDirectory, { recursive: true, force: true })
   }
 }
 
-main()
+main().catch((error) => {
+  console.error('FAIL:', error)
+  process.exitCode = 1
+})

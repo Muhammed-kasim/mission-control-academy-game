@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent, type RefObject } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Flame, Gauge, Orbit, Rocket as RocketIcon, ShieldAlert, Sparkles, Target } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Flame, Gauge, Globe2, Orbit, Rocket as RocketIcon, ShieldAlert, Sparkles, Target } from 'lucide-react'
 import type { MissionConfiguration, MissionEstimate, MissionId, MissionProfile, RocketAppearance, SpacecraftSize } from './mission-data'
 import { getOrbit, getRocket } from './mission-data'
 import type { LaunchPhaseName, LaunchPhaseResult, LaunchResult } from './mission-simulation'
@@ -109,6 +109,7 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
   const phaseRef = useRef(phase)
   const doneRef = useRef(phaseDone)
   const [quality, setQuality] = useState<LaunchQuality>('auto')
+  const [autoPilotEnabled, setAutoPilotEnabled] = useState(false)
   const [qualityLoaded, setQualityLoaded] = useState(false)
   const [showFps, setShowFps] = useState(false)
   const [soundsReady, setSoundsReady] = useState(false)
@@ -291,6 +292,13 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
     registerPhaseResult('separation', distance <= 17 ? 'Perfect' : distance <= 48 ? 'Good' : 'Miss')
   }, [play, registerPhaseResult, smoothMode])
 
+  useEffect(() => {
+    if (!autoPilotEnabled || phase !== 'separation' || phaseDone) return
+    const targetTimeMs = targetStageAngle / 168 * 1000
+    const timer = window.setTimeout(attemptSeparation, targetTimeMs)
+    return () => window.clearTimeout(timer)
+  }, [attemptSeparation, autoPilotEnabled, phase, phaseDone, targetStageAngle])
+
   const startLaunch = useCallback(async () => {
     if (blockReason) {
       updatePhase('failure')
@@ -357,6 +365,12 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
       updatePhase('result')
     }
   }, [combo, payloadRatio, phase, updatePhase])
+
+  useEffect(() => {
+    if (!autoPilotEnabled || !phaseDone || (phase !== 'throttle' && phase !== 'turn' && phase !== 'separation')) return
+    const timer = window.setTimeout(nextPhase, 700)
+    return () => window.clearTimeout(timer)
+  }, [autoPilotEnabled, nextPhase, phase, phaseDone])
 
   const skipToResults = useCallback(() => {
     if (phaseRef.current !== 'throttle' && phaseRef.current !== 'turn' && phaseRef.current !== 'separation') return
@@ -472,6 +486,7 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
       safeHalfWidth={safeHalfWidth}
       quality={quality}
       smoothMode={smoothMode}
+      autoPilot={autoPilotEnabled}
       rocketId={rocket.id}
       missionId={mission.id}
       instrumentIds={configuration.instrumentIds}
@@ -487,6 +502,7 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
     <header className="launch-game-top">
       <span className="launch-game-brand"><RocketIcon aria-hidden="true" /> FLIGHT CONTROL / {mission.shortName.toUpperCase()}</span>
       <span className="launch-game-vehicle">{rocket.name} <i /> {orbit.name}</span>
+      <label className="launch-autopilot-control"><span>AUTO PILOT</span><input type="checkbox" role="switch" aria-label="Autopilot; automatically fly and advance all launch phases" checked={autoPilotEnabled} disabled={phase !== 'ready'} onChange={(event) => setAutoPilotEnabled(event.currentTarget.checked)} /></label>
       <label className="launch-quality-control"><span>QUALITY</span><select disabled={phase !== 'ready'} value={quality} onChange={(event) => {
         const selected = event.currentTarget.value
         if (selected === 'auto' || selected === 'high' || selected === 'low') setQuality(selected)
@@ -509,11 +525,15 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
       <span className="eyebrow">READY FOR FLIGHT</span><h1>{phase === 'risk-roll' ? 'Launch chance roll!' : 'Ready!'}</h1>
       <div className="launch-dice" aria-live="polite">{phase === 'risk-roll' ? '🎲' : `${actualLaunchChance}%`}</div>
       <p ref={rollOutcomeRef}>{phase === 'risk-roll' ? 'The dice are rolling…' : `Nova: ${rocket.name} is ready. This rocket has a ${actualLaunchChance}% chance.`}</p>
+      {phase === 'ready' && <p className="launch-controls-guide">{autoPilotEnabled
+        ? 'Autopilot handles thrust, steering, stage separation, and phase changes.'
+        : 'Manual controls: hold THRUST or Space, steer with ← / → or the slider, then separate at the glowing marker.'}</p>}
       {learningBonus > 0 && <small className="learning-bonus-note">Learning bonus +{learningBonus}%</small>}
       {phase === 'ready' && <PrimaryButton disabled={!soundsReady} onClick={startLaunch}>{soundsReady ? 'Begin countdown' : 'Getting sounds ready…'}</PrimaryButton>}
     </section> : <LaunchFlightHUD
       phase={phase}
       phaseDone={phaseDone}
+      autoPilotEnabled={autoPilotEnabled}
       combo={combo}
       payloadRatio={payloadRatio}
       response={response}
@@ -547,7 +567,7 @@ export const MissionLaunchGame = memo(function MissionLaunchGame({ mission, size
 type LiveLaunchPhase = 'throttle' | 'turn' | 'separation'
 
 const LaunchScene2D = memo(function LaunchScene2D({
-  phase, phaseDone, phaseSeconds, payloadRatio, response, safeHalfWidth, quality, smoothMode, rocketId, missionId, instrumentIds,
+  phase, phaseDone, phaseSeconds, payloadRatio, response, safeHalfWidth, quality, smoothMode, autoPilot, rocketId, missionId, instrumentIds,
   appearance, controls, showFps, onCountdownComplete, onCountdownTick, onEngineLevel, onPhaseTimeout, onMaxQ,
 }: {
   phase: LaunchPhase
@@ -558,6 +578,7 @@ const LaunchScene2D = memo(function LaunchScene2D({
   safeHalfWidth: number
   quality: LaunchQuality
   smoothMode: boolean
+  autoPilot: boolean
   rocketId: string
   missionId: MissionId
   instrumentIds: string[]
@@ -574,7 +595,7 @@ const LaunchScene2D = memo(function LaunchScene2D({
   const rocketRef = useRef<HTMLDivElement>(null)
   const rocketNoseRef = useRef<SVGPathElement>(null)
   const rocketStageBodyRef = useRef<SVGRectElement>(null)
-  const rocketFinsRef = useRef<SVGPathElement>(null)
+  const rocketFinsRef = useRef<SVGPolygonElement>(null)
   const flameRef = useRef<HTMLDivElement>(null)
   const flameCoreRef = useRef<HTMLDivElement>(null)
   const padRef = useRef<HTMLDivElement>(null)
@@ -636,6 +657,7 @@ const LaunchScene2D = memo(function LaunchScene2D({
     safeHalfWidth,
     quality,
     smoothMode,
+    autoPilot,
     rocketId,
     missionId,
     elements,
@@ -687,6 +709,7 @@ const LaunchScene2D = memo(function LaunchScene2D({
 const LaunchFlightHUD = memo(function LaunchFlightHUD({
   phase,
   phaseDone,
+  autoPilotEnabled,
   combo,
   payloadRatio,
   response,
@@ -717,6 +740,7 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
 }: {
   phase: LiveLaunchPhase
   phaseDone: boolean
+  autoPilotEnabled: boolean
   combo: number
   payloadRatio: number
   response: number
@@ -750,6 +774,21 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
       <div className="launch-phase-heading"><span><small>FLIGHT PHASE {phase === 'throttle' ? '01' : phase === 'turn' ? '02' : '03'} / 03</small><h1>{phase === 'throttle' ? 'Hold the thrust window.' : phase === 'turn' ? 'Ride the gravity turn.' : 'Separate on the mark.'}</h1></span><span className="launch-phase-timer"><span ref={timerTextRef}>{PHASE_SECONDS[phase]}</span><small>SEC</small></span></div>
       <div className="launch-phase-rail" aria-label="Launch phase progress"><i className={phase !== 'throttle' ? 'launch-rail-done' : 'launch-rail-active'} /><i className={phase === 'turn' ? 'launch-rail-active' : phase === 'separation' ? 'launch-rail-done' : ''} /><i className={phase === 'separation' ? 'launch-rail-active' : ''} /></div>
       <div className="launch-live-stats"><span><b>COMBO</b><strong>{combo}×</strong></span><span><b>PAYLOAD LOAD</b><strong>{Math.round(payloadRatio * 100)}%</strong></span><span><b>CONTROL RESPONSE</b><strong>{Math.round(response * 100)}%</strong></span></div>
+      <section className="launch-trajectory-map" aria-label={`Rocket map to ${orbitName}`}>
+        <div className="launch-map-heading"><span><Globe2 aria-hidden="true" /> ROCKET MAP</span><strong>{orbitName}</strong></div>
+        <div className="launch-map-display">
+          <svg viewBox="0 0 360 100" preserveAspectRatio="none" aria-hidden="true">
+            <path className="launch-map-grid" d="M0 25H360M0 50H360M0 75H360M60 0V100M120 0V100M180 0V100M240 0V100M300 0V100" />
+            <path className="launch-map-route" d="M28 72 C86 18 174 14 330 39" />
+            <circle className="launch-map-home" cx="28" cy="72" r="6" />
+            <circle className="launch-map-destination" cx="330" cy="39" r="5" />
+          </svg>
+          <span className="launch-map-home-label">EARTH</span>
+          <span className="launch-map-destination-label">ORBIT</span>
+          <RocketIcon className="launch-map-rocket" aria-hidden="true" />
+        </div>
+        <div className="launch-map-status"><span>LIVE TRAJECTORY</span><span>{phase === 'separation' ? 'STAGE SEPARATION' : phase === 'turn' ? 'GRAVITY TURN' : 'ASCENT'}</span></div>
+      </section>
       {phase === 'throttle' && <div className="launch-throttle-panel">
         <div className="launch-gauge-label"><span><Gauge aria-hidden="true" /> THROTTLE / MAX-Q</span><strong><span ref={throttleValueRef}>42%</span></strong></div>
         <div className="launch-throttle-gauge" ref={throttleGaugeRef} role="meter" aria-label="Rocket throttle" aria-valuenow={42} aria-valuemin={0} aria-valuemax={100}>
@@ -762,7 +801,7 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
         <button ref={holdControlRef} type="button" className="launch-hold-control" onPointerDown={onHoldStart} onPointerUp={onRelease} onPointerCancel={onRelease} onContextMenu={(event) => event.preventDefault()}>
           <ArrowUp aria-hidden="true" /> HOLD TO BUILD THRUST <small>RELEASE TO EASE · SPACE BAR ALSO WORKS</small>
         </button>
-        {phaseDone && <div className={`launch-phase-feedback feedback-${gradeTone}`} role="status"><strong>{lastResult?.grade ?? 'Miss'}</strong><span>{lastResult?.grade === 'Perfect' ? 'Max-Q stayed in the safe corridor.' : lastResult?.grade === 'Good' ? 'Stable ascent; small thrust corrections remain.' : 'Throttle drift caused speed loss or structural stress.'}</span><button type="button" onClick={onNextPhase}>Gravity turn <ArrowRight aria-hidden="true" /></button></div>}
+        {phaseDone && <div className={`launch-phase-feedback feedback-${gradeTone}`} role="status"><strong>{lastResult?.grade ?? 'Miss'}</strong><span>{lastResult?.grade === 'Perfect' ? 'Max-Q stayed in the safe corridor.' : lastResult?.grade === 'Good' ? 'Stable ascent; small thrust corrections remain.' : 'Throttle drift caused speed loss or structural stress.'}</span>{autoPilotEnabled ? <small>Autopilot advancing…</small> : <button type="button" onClick={onNextPhase}>Gravity turn <ArrowRight aria-hidden="true" /></button>}</div>}
       </div>}
       {phase === 'turn' && <div className="launch-turn-panel">
         <div className="launch-turn-heading"><span><Orbit aria-hidden="true" /> TARGET ORBIT ARC</span><strong><span ref={headingTargetValueRef}>13</span>°</strong></div>
@@ -770,13 +809,13 @@ const LaunchFlightHUD = memo(function LaunchFlightHUD({
         <input className="launch-heading-slider" type="range" min="-45" max="45" defaultValue="0" aria-label="Steer rocket heading" onInput={onHeadingInput} />
         <div className="launch-steer-controls"><button type="button" aria-label="Steer left" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); onSteerStart(-1) }} onPointerUp={onRelease} onPointerCancel={onRelease}><ArrowLeft aria-hidden="true" /></button><span>ARROW KEYS · DRAG SLIDER · HOLD TO STEER</span><button type="button" aria-label="Steer right" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); onSteerStart(1) }} onPointerUp={onRelease} onPointerCancel={onRelease}><ArrowRight aria-hidden="true" /></button></div>
         <p className="launch-turn-hint"><ArrowDown aria-hidden="true" /> Keep the flight-path marker near the moving target. A heavy payload responds more slowly.</p>
-        {phaseDone && <div className={`launch-phase-feedback feedback-${gradeTone}`} role="status"><strong>{lastResult?.grade ?? 'Miss'}</strong><span>{lastResult?.grade === 'Perfect' ? 'Trajectory is locked on the target orbit.' : lastResult?.grade === 'Good' ? 'The orbit is reachable with a small insertion correction.' : 'The turn drifted away from the target arc.'}</span><button type="button" onClick={onNextPhase}>Stage separation <ArrowRight aria-hidden="true" /></button></div>}
+        {phaseDone && <div className={`launch-phase-feedback feedback-${gradeTone}`} role="status"><strong>{lastResult?.grade ?? 'Miss'}</strong><span>{lastResult?.grade === 'Perfect' ? 'Trajectory is locked on the target orbit.' : lastResult?.grade === 'Good' ? 'The orbit is reachable with a small insertion correction.' : 'The turn drifted away from the target arc.'}</span>{autoPilotEnabled ? <small>Autopilot advancing…</small> : <button type="button" onClick={onNextPhase}>Stage separation <ArrowRight aria-hidden="true" /></button>}</div>}
       </div>}
       {phase === 'separation' && <div className="launch-separation-panel">
         <div className="launch-separation-ring" style={{ '--target-angle': `${targetStageAngle}deg` } as CSSProperties}><i className="launch-ring-target" /><i className="launch-ring-pointer" ref={separationPointerRef} /><span><b>T−<span ref={separationTimerRef}>{PHASE_SECONDS.separation}</span></b><small>SEPARATE AT THE MARK</small></span></div>
         <p>Tap when the moving indicator reaches the glowing target. Release the spent stage cleanly.</p>
         <button type="button" className="launch-separate-control" onClick={onSeparate} disabled={phaseDone}>SEPARATE STAGE <RocketIcon aria-hidden="true" /></button>
-        {phaseDone && <div className={`launch-phase-feedback feedback-${gradeTone}`} role="status"><strong>{lastResult?.grade ?? 'Miss'}</strong><span>{lastResult?.grade === 'Perfect' ? 'Clean separation; fuel and orbit insertion are on target.' : lastResult?.grade === 'Good' ? 'Stage released with a small fuel penalty.' : 'Late or early separation reduced insertion margin.'}</span><button type="button" onClick={onNextPhase}>Flight debrief <ArrowRight aria-hidden="true" /></button></div>}
+        {phaseDone && <div className={`launch-phase-feedback feedback-${gradeTone}`} role="status"><strong>{lastResult?.grade ?? 'Miss'}</strong><span>{lastResult?.grade === 'Perfect' ? 'Clean separation; fuel and orbit insertion are on target.' : lastResult?.grade === 'Good' ? 'Stage released with a small fuel penalty.' : 'Late or early separation reduced insertion margin.'}</span>{autoPilotEnabled ? <small>Autopilot advancing…</small> : <button type="button" onClick={onNextPhase}>Flight debrief <ArrowRight aria-hidden="true" /></button>}</div>}
       </div>}
       <button className="launch-skip-button" type="button" onClick={onSkipToResults}>Skip to results</button>
     </section>

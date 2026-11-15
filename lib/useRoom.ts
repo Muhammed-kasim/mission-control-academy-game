@@ -22,6 +22,42 @@ export type RoomDesign = {
   stations: number
 }
 
+type StoredRoomSession = { roomCode: string; playerId: string }
+const ROOM_SESSION_KEY = 'mission-control-room-session-v1'
+
+function readRoomSession(): StoredRoomSession | null {
+  try {
+    const stored = window.localStorage.getItem(ROOM_SESSION_KEY)
+    if (!stored) return null
+    const parsed: unknown = JSON.parse(stored)
+    if (typeof parsed !== 'object' || parsed === null || !('roomCode' in parsed) || !('playerId' in parsed)) return null
+    return typeof parsed.roomCode === 'string' && typeof parsed.playerId === 'string'
+      ? { roomCode: parsed.roomCode, playerId: parsed.playerId }
+      : null
+  } catch (error) {
+    console.warn('Could not restore the saved multiplayer room.', error)
+    return null
+  }
+}
+
+function storeRoomSession(session: StoredRoomSession) {
+  try {
+    window.localStorage.setItem(ROOM_SESSION_KEY, JSON.stringify(session))
+    return true
+  } catch (error) {
+    console.warn('Could not save the multiplayer room session.', error)
+    return false
+  }
+}
+
+function clearRoomSession() {
+  try {
+    window.localStorage.removeItem(ROOM_SESSION_KEY)
+  } catch (error) {
+    console.warn('Could not clear the saved multiplayer room.', error)
+  }
+}
+
 export function useRoom() {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [roomCode, setRoomCode] = useState('')
@@ -43,7 +79,11 @@ export function useRoom() {
 
   const serverUrl = useMemo(() => {
     if (typeof window === 'undefined') return 'http://localhost:4000'
-    return process.env.NEXT_PUBLIC_SERVER_URL || `http://${window.location.hostname}:4000`
+    if (process.env.NEXT_PUBLIC_SERVER_URL) return process.env.NEXT_PUBLIC_SERVER_URL
+    const forwardedHost = window.location.hostname.replace(/-\d+\.app\.github\.dev$/i, '-4000.app.github.dev')
+    return forwardedHost !== window.location.hostname
+      ? `${window.location.protocol}//${forwardedHost}`
+      : `${window.location.protocol}//${window.location.hostname}:4000`
   }, [])
 
   useEffect(() => {
@@ -53,8 +93,16 @@ export function useRoom() {
     })
 
     instance.on('connect', () => {
+      setSocket(instance)
       setOnline(true)
       setError('')
+      const savedSession = readRoomSession()
+      if (savedSession) instance.emit('room:reconnect', savedSession)
+    })
+
+    instance.on('connect_error', () => {
+      setOnline(false)
+      setError('Multiplayer server is unavailable. Check that the backend is running.')
     })
 
     instance.on('disconnect', () => {
@@ -64,11 +112,17 @@ export function useRoom() {
     instance.on('room:created', ({ roomCode: nextCode, playerId: nextPlayerId }: { roomCode: string; playerId: string }) => {
       setRoomCode(nextCode)
       setPlayerId(nextPlayerId)
+      if (!storeRoomSession({ roomCode: nextCode, playerId: nextPlayerId })) {
+        setError('Room created, but this browser could not save the reconnect session.')
+      }
     })
 
     instance.on('room:joined', ({ roomCode: nextCode, playerId: nextPlayerId }: { roomCode: string; playerId: string }) => {
       setRoomCode(nextCode)
       setPlayerId(nextPlayerId)
+      if (!storeRoomSession({ roomCode: nextCode, playerId: nextPlayerId })) {
+        setError('Room joined, but this browser could not save the reconnect session.')
+      }
     })
 
     instance.on('room:state', (snapshot: { roomCode: string; players: RoomPlayer[]; design: RoomDesign }) => {
@@ -79,9 +133,13 @@ export function useRoom() {
 
     instance.on('room:error', (message: string) => {
       setError(message)
+      if (message.startsWith('Player session not found')) {
+        clearRoomSession()
+        setRoomCode('')
+        setPlayerId('')
+        setPlayers([])
+      }
     })
-
-    setSocket(instance)
 
     return () => {
       instance.disconnect()

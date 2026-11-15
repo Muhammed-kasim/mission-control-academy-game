@@ -9,6 +9,7 @@
 
 # production
 /build
+/data/mission-control.sqlite*
 
 # debug
 npm-debug.log*
