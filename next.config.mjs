@@ -1,3 +1,5 @@
+import os from 'node:os'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -6,6 +8,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  allowedDevOrigins: (() => {
+    const addresses = []
+    for (const details of Object.values(os.networkInterfaces())) {
+      for (const entry of details ?? []) {
+        if (entry.family === 'IPv4' && !entry.internal) addresses.push(`http://${entry.address}:3000`)
+      }
+    }
+    return addresses
+  })(),
   async headers() {
     return [
       {

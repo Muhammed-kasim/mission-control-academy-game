@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState } from 'react'
@@ -15,7 +16,7 @@ export function WelcomeScreen({ onPlay, onSources, difficulty, onDifficultyChang
       <div className="challenge-label"><span className="challenge-orbit"><Globe2 aria-hidden="true" /></span><span>SPACE ADVENTURE<span className="challenge-subline">A GAME FOR CURIOUS EXPLORERS</span></span></div>
       <div className="welcome-title-wrap"><p className="eyebrow">MEET NOVA, YOUR ROBOT GUIDE <span className="eyebrow-rule" /></p><h1>Build a rocket.<br /><em>Help a planet.</em></h1></div>
       <p className="welcome-description">Pick a planet, build a ship, and bring home its discoveries.</p>
-      <div className="welcome-actions"><button className="play-button" onClick={onPlay}><span className="play-icon"><Sparkles aria-hidden="true" /></span>Start an adventure<ArrowUpRight aria-hidden="true" /></button><button className="tutorial-toggle" type="button" aria-expanded={showTutorial} onClick={() => setShowTutorial((current) => !current)}><Clock3 aria-hidden="true" />{showTutorial ? 'Hide how to play' : 'How to play'}</button><button className="tutorial-toggle sources-toggle" type="button" onClick={onSources}><BookOpen aria-hidden="true" />Real NASA stories</button></div>
+      <div className="welcome-actions"><button className="play-button" onClick={onPlay}><span className="play-icon"><Sparkles aria-hidden="true" /></span>Start an adventure<ArrowUpRight aria-hidden="true" /></button><button className="tutorial-toggle" type="button" aria-expanded={showTutorial} onClick={() => setShowTutorial((current) => !current)}><Clock3 aria-hidden="true" />{showTutorial ? 'Hide how to play' : 'How to play'}</button><button className="tutorial-toggle sources-toggle" type="button" onClick={onSources}><BookOpen aria-hidden="true" />Real NASA stories</button><a className="tutorial-toggle sources-toggle" href="/mptest" style={{ textDecoration: 'none' }}><BookOpen aria-hidden="true" />Create room</a><a className="tutorial-toggle sources-toggle" href="/nasa-gallery" style={{ textDecoration: 'none' }}><Globe2 aria-hidden="true" />NASA research</a></div>
       <section className="play-mode-setup" aria-label="Choose solo or team mode">
         <div className="play-mode-heading"><span><b>Pick your crew</b><small>Play alone or share one screen with friends.</small></span><span className="eyebrow">CREW</span></div>
         <div className="play-mode-options" role="group" aria-label="Play mode">
